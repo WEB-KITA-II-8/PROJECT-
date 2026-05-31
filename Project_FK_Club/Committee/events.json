@@ -1,0 +1,14 @@
+[
+    {
+        "event_id": 1,
+        "event_name": "CAT FESTIVAL",
+        "event_location": "DEWAN SERBAGUNA",
+        "event_capacity": 100,
+        "event_description": "CAT LOVER",
+        "event_date": "2026-06-06",
+        "contact_name": "ATIEFFA",
+        "contact_phone": "01121121113",
+        "contact_email": "atieffa@student.com",
+        "event_coords": "103.424395, 4.241878"
+    }
+]

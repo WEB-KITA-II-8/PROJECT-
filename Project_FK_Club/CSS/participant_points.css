@@ -1,0 +1,595 @@
+/* =============================================
+PARTICIPANT POINTS & RANKING PAGE CSS
+FILE: css/participant_points.css
+============================================= */
+
+/* =============================================
+PAGE HEADER
+============================================= */
+.page-header {
+    margin-bottom: 30px;
+}
+
+.page-header h1 {
+    font-size: 32px;
+    font-weight: 900;
+    color: #0f172a;
+    margin-bottom: 8px;
+}
+
+.page-header p {
+    font-size: 16px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* =============================================
+SECTION CONTAINER (Recognition + Top Students)
+============================================= */
+.section-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    margin-bottom: 35px;
+}
+
+/* =============================================
+RECOGNITION SECTION
+============================================= */
+.recognition-section {
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(6px);
+    padding: 26px;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: 0 8px 24px rgba(148,163,184,0.12);
+}
+
+.recognition-section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.recognition-section h2 i {
+    color: #2563eb;
+    font-size: 24px;
+}
+
+.levels-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+.level-card {
+    padding: 18px;
+    background: #f8fafc;
+    border-radius: 14px;
+    display: flex;
+    gap: 16px;
+    transition: all 0.3s ease;
+}
+
+.level-card:hover {
+    background: #f1f5f9;
+    transform: translateX(4px);
+}
+
+.level-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 24px;
+}
+
+.level-content h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+}
+
+.level-range {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    margin: 2px 0;
+}
+
+.level-description {
+    font-size: 13px;
+    font-weight: 500;
+    color: #94a3b8;
+    margin: 4px 0 0 0;
+}
+
+/* =============================================
+TOP STUDENTS SECTION
+============================================= */
+.top-students-section {
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(6px);
+    padding: 26px;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: 0 8px 24px rgba(148,163,184,0.12);
+}
+
+.top-students-section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.top-students-section h2 i {
+    color: #2563eb;
+    font-size: 24px;
+}
+
+.ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px;
+    background: #f8fafc;
+    border-radius: 14px;
+    transition: all 0.3s ease;
+}
+
+.ranking-item:hover {
+    background: #f1f5f9;
+}
+
+.rank-number {
+    font-size: 20px;
+    font-weight: 800;
+    color: #2563eb;
+    min-width: 40px;
+    text-align: center;
+}
+
+.student-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    min-width: 160px;
+}
+
+.student-info h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+}
+
+.student-email {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.progress-bar-container {
+    flex: 1;
+    height: 24px;
+    background: #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 0 16px;
+}
+
+.progress-bar {
+    height: 100%;
+    border-radius: 12px;
+    transition: width 0.3s ease;
+}
+
+.points-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.points {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.status-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 10px;
+}
+
+/* =============================================
+ALL STUDENTS SECTION
+============================================= */
+.all-students-section {
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(6px);
+    padding: 26px;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: 0 8px 24px rgba(148,163,184,0.12);
+    margin-bottom: 35px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 20px;
+}
+
+.all-students-section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+}
+
+.all-students-section h2 i {
+    color: #2563eb;
+    font-size: 24px;
+}
+
+/* =============================================
+SEARCH BOX
+============================================= */
+.search-box {
+    flex-shrink: 0;
+}
+
+.search-form {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-form i {
+    position: absolute;
+    left: 14px;
+    color: #cbd5e1;
+    font-size: 16px;
+}
+
+.search-input {
+    width: 300px;
+    padding: 10px 14px 10px 40px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1e293b;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+.search-input::placeholder {
+    color: #cbd5e1;
+}
+
+/* =============================================
+TABLE CONTAINER
+============================================= */
+.table-container {
+    overflow-x: auto;
+}
+
+.students-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.students-table thead {
+    background: #f8fafc;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.students-table th {
+    padding: 16px 14px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.students-table td {
+    padding: 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px;
+    color: #334155;
+    font-weight: 500;
+}
+
+.students-table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.students-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.points-cell {
+    font-weight: 700;
+}
+
+.recognition-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* =============================================
+VIEW BUTTON
+============================================= */
+.view-btn {
+    padding: 8px 14px;
+    background: linear-gradient(90deg, #2348b8, #2d5fd3);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.3s ease;
+}
+
+.view-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(35,72,184,0.24);
+}
+
+/* =============================================
+RESPONSIVE DESIGN
+============================================= */
+@media (max-width: 1400px) {
+    .section-container {
+        grid-template-columns: 1fr;
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .search-input {
+        width: 100%;
+    }
+}
+
+@media (max-width: 1200px) {
+    .page-header h1 {
+        font-size: 28px;
+    }
+
+    .recognition-section,
+    .top-students-section,
+    .all-students-section {
+        padding: 20px;
+    }
+
+    .search-input {
+        width: 250px;
+    }
+}
+
+@media (max-width: 992px) {
+    .ranking-item {
+        flex-wrap: wrap;
+    }
+
+    .progress-bar-container {
+        flex: 1 100%;
+        order: 3;
+        margin: 10px 0 0 56px;
+    }
+
+    .points-info {
+        order: 2;
+    }
+
+    .search-input {
+        width: 200px;
+    }
+
+    .students-table {
+        font-size: 12px;
+    }
+
+    .students-table th,
+    .students-table td {
+        padding: 10px 8px;
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header h1 {
+        font-size: 24px;
+    }
+
+    .page-header p {
+        font-size: 14px;
+    }
+
+    .section-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .search-input {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .section-container {
+        gap: 20px;
+    }
+
+    .recognition-section,
+    .top-students-section,
+    .all-students-section {
+        padding: 18px;
+    }
+
+    .level-card {
+        padding: 14px;
+        gap: 12px;
+    }
+
+    .level-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+    }
+
+    .ranking-item {
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .student-info {
+        min-width: 120px;
+    }
+
+    .ranking-item:hover {
+        background: #f1f5f9;
+    }
+
+    .view-btn {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    .students-table {
+        font-size: 11px;
+    }
+
+    .students-table th,
+    .students-table td {
+        padding: 8px 6px;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-header h1 {
+        font-size: 20px;
+        margin-bottom: 6px;
+    }
+
+    .section-container {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .recognition-section,
+    .top-students-section,
+    .all-students-section {
+        padding: 14px;
+    }
+
+    .recognition-section h2,
+    .top-students-section h2,
+    .all-students-section h2 {
+        font-size: 18px;
+        margin-bottom: 16px;
+    }
+
+    .level-card {
+        padding: 12px;
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .level-icon {
+        margin: 0 auto;
+    }
+
+    .level-range,
+    .level-description {
+        text-align: center;
+    }
+
+    .ranking-item {
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .rank-number {
+        font-size: 16px;
+    }
+
+    .student-info {
+        min-width: 100px;
+    }
+
+    .progress-bar-container {
+        margin: 10px 0 0 0;
+    }
+
+    .points-info {
+        align-items: center;
+        width: 100%;
+    }
+
+    .search-input {
+        width: 100%;
+        font-size: 13px;
+    }
+
+    .section-header {
+        flex-direction: column;
+    }
+
+    .students-table {
+        font-size: 10px;
+    }
+
+    .students-table th,
+    .students-table td {
+        padding: 6px 4px;
+    }
+
+    .view-btn {
+        padding: 5px 8px;
+        font-size: 10px;
+    }
+}
