@@ -1,0 +1,247 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI', sans-serif;
+}
+
+body{
+    background:#eef1f6;
+}
+
+/* PAGE HEADER */
+.page-header h2{
+    font-size:56px;
+    font-weight:800;
+    color:#0f172a;
+    margin-bottom:10px;
+}
+
+.page-header p{
+    color:#64748b;
+    font-size:18px;
+    margin-bottom:40px;
+}
+
+/* CARD */
+.club-card{
+    background:white;
+    border-radius:30px;
+    padding:35px;
+}
+
+/* HEADER */
+.club-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:35px;
+    flex-wrap:wrap;
+    gap:20px;
+}
+
+.search-area{
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+}
+
+/* SEARCH */
+.search-box{
+    position:relative;
+}
+
+.search-box i{
+    position:absolute;
+    left:20px;
+    top:18px;
+    color:#94a3b8;
+    font-size:20px;
+}
+
+.search-box input{
+    width:400px;
+    height:60px;
+    border:1px solid #d1d5db;
+    border-radius:20px;
+    padding-left:55px;
+    font-size:18px;
+    outline:none;
+    background:#f8fafc;
+}
+
+/* STATUS DROPDOWN */
+.status-dropdown{
+    width:230px;
+    height:60px;
+    border:1px solid #d1d5db;
+    border-radius:20px;
+    padding:0 18px;
+    font-size:18px;
+    background:white;
+    outline:none;
+}
+
+/* ADD BUTTON */
+.add-club-btn{
+    background:#2f5be7;
+    color:white;
+    text-decoration:none;
+    padding:16px 28px;
+    border-radius:18px;
+    font-size:18px;
+    font-weight:600;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    transition:0.2s;
+}
+
+.add-club-btn:hover{
+    background:#2148c9;
+}
+
+/* TABLE */
+.club-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.club-table thead{
+    background:#eef2ff;
+}
+
+.club-table th{
+    padding:24px;
+    font-size:18px;
+    color:#1e3a5f;
+    font-weight:700;
+}
+
+.club-table td{
+    padding:28px 24px;
+    border-bottom:1px solid #e5e7eb;
+    font-size:17px;
+    color:#0f172a;
+}
+
+.club-table tbody tr:hover{
+    background:#f8fafc;
+}
+
+/* STATUS BADGES */
+.active-status{
+    background:#dcfce7;
+    color:#16a34a;
+    padding:12px 22px;
+    border-radius:999px;
+    font-weight:600;
+    display:inline-block;
+}
+
+.inactive-status{
+    background:#fee2e2;
+    color:#dc2626;
+    padding:12px 22px;
+    border-radius:999px;
+    font-weight:600;
+    display:inline-block;
+}
+
+/* ACTION BUTTONS */
+.action-buttons{
+    display:flex;
+    gap:14px;
+}
+
+.action-btn{
+    width:54px;
+    height:54px;
+    border-radius:16px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-decoration:none;
+    font-size:18px;
+    border:1px solid;
+    background:white;
+}
+
+.eye-btn{
+    color:#2563eb;
+    border-color:#c7d2fe;
+}
+
+.edit-btn{
+    color:#f59e0b;
+    border-color:#fde68a;
+}
+
+.delete-btn{
+    color:#ef4444;
+    border-color:#fecaca;
+}
+
+/* MODAL */
+.modal-overlay{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.5);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:999;
+}
+
+.delete-modal{
+    width:400px;
+    background:white;
+    border-radius:25px;
+    padding:35px;
+    text-align:center;
+}
+
+.warning-icon{
+    font-size:55px;
+    color:#ef4444;
+    margin-bottom:15px;
+}
+
+.delete-modal h3{
+    font-size:28px;
+    margin-bottom:10px;
+}
+
+.delete-modal p{
+    color:#64748b;
+    font-size:17px;
+}
+
+.modal-buttons{
+    margin-top:25px;
+    display:flex;
+    justify-content:center;
+    gap:15px;
+}
+
+.cancel-btn,
+.confirm-delete-btn{
+    padding:12px 25px;
+    border:none;
+    border-radius:12px;
+    font-size:16px;
+    cursor:pointer;
+    text-decoration:none;
+}
+
+.cancel-btn{
+    background:#e2e8f0;
+}
+
+.confirm-delete-btn{
+    background:#ef4444;
+    color:white;
+}

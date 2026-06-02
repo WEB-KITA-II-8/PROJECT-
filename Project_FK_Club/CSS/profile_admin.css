@@ -1,0 +1,520 @@
+/*=============================================
+ADMIN PROFILE PAGE
+FILE: css/profile_admin.css
+=============================================*/
+
+/* =============================================
+   GLOBAL SETTINGS
+============================================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+}
+
+html,
+body {
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    color: #1e293b;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* Decorative dashboard overlay */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 260px;
+    width: calc(100% - 260px);
+    height: 100%;
+    background:
+        radial-gradient(circle at top right, rgba(255,255,255,0.35), transparent 40%),
+        radial-gradient(circle at bottom left, rgba(203,213,225,0.20), transparent 35%);
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* =============================================
+   MAIN CONTENT AREA
+============================================= */
+.main-content {
+    margin-left: 260px;
+    margin-top: 88px;
+    padding: 28px 40px 40px;
+    min-height: 100vh;
+}
+
+
+/* =============================================
+   PAGE TITLE
+============================================= */
+.main-content h1 {
+    font-size: 34px;
+    font-weight: 900;
+    color: #0f172a;
+    margin-bottom: 30px;
+}
+
+/* =============================================
+   PROFILE CONTAINER
+============================================= */
+.profile-container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: rgba(255,255,255,0.96);
+    padding: 45px;
+    border-radius: 26px;
+    box-shadow: 0 8px 24px rgba(148,163,184,0.12);
+    border: 1px solid rgba(255,255,255,0.4);
+}
+
+/* =============================================
+   PROFILE IMAGE SECTION
+============================================= */
+.profile-image-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 35px;
+    text-align: center;
+}
+
+.profile-image-preview {
+    width: 145px;
+    height: 145px;
+    border-radius: 50%;
+    border: 4px solid #2d5fd3;
+    object-fit: cover;
+    background: white;
+    box-shadow: 0 8px 20px rgba(45,95,211,0.25);
+    margin-bottom: 15px;
+}
+
+.upload-group {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 25px;
+    width: 100%;
+}
+
+.profile-image-section input[type="file"] {
+    font-size: 14px;
+}
+
+/* =============================================
+   FORM SECTION
+============================================= */
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 8px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 16px 18px;
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    font-size: 15px;
+    color: #1e293b;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+    border-color: #2d5fd3;
+    box-shadow: 0 0 0 3px rgba(45,95,211,0.15);
+    outline: none;
+}
+
+.form-group input::placeholder {
+    color: #64748b;
+}
+
+/* =============================================
+   ERROR MESSAGE
+============================================= */
+.error-message {
+    background: #fee2e2;
+    color: #dc2626;
+    padding: 16px 18px;
+    border-radius: 14px;
+    margin-bottom: 25px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+/* =============================================
+   BUTTON SECTION
+============================================= */
+.form-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 18px;
+    margin-top: 35px;
+    flex-wrap: wrap;
+}
+
+/* Save Button */
+.save-btn,
+button[type="submit"] {
+    background: linear-gradient(90deg, #2d5fd3, #3a6ee8);
+    color: white;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(45,95,211,0.28);
+    transition: all 0.3s ease;
+}
+
+.save-btn:hover,
+button[type="submit"]:hover {
+    transform: translateY(-3px);
+}
+
+/* Delete Image Button */
+.delete-image-btn {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(239,68,68,0.25);
+    transition: all 0.3s ease;
+}
+
+.delete-image-btn:hover {
+    transform: translateY(-3px);
+    background: linear-gradient(90deg, #dc2626, #b91c1c);
+}
+
+/* Cancel Button */
+.cancel-btn {
+    background: #e2e8f0;
+    color: #334155;
+    padding: 14px 28px;
+    border-radius: 14px;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 700;
+    transition: all 0.3s ease;
+}
+
+.cancel-btn:hover {
+    background: #cbd5e1;
+}
+
+/* =============================================
+   FONT AWESOME ICON FIX
+============================================= */
+.icon i,
+.profile-icon i,
+.delete-image-btn i,
+.save-btn i {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+    font-style: normal !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    visibility: visible !important;
+    opacity: 1 !important;
+    line-height: 1 !important;
+}
+
+/* =============================================
+   POPUP OVERLAY
+============================================= */
+.popup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(9px);
+    -webkit-backdrop-filter: blur(9px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    z-index: 99999;
+}
+
+/* =============================================
+   POPUP BOX
+============================================= */
+.delete-popup,
+.success-popup,
+.warning-popup {
+    background: white;
+    padding: 35px !important;
+    border-radius: 24px !important;
+    width: 420px !important;
+    max-width: 90% !important;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25) !important;
+    animation: popupFade 0.3s ease;
+}
+
+/* =============================================
+   ICON CIRCLE
+============================================= */
+.delete-popup .icon,
+.success-popup .icon,
+.warning-popup .icon {
+    width: 75px !important;
+    height: 75px !important;
+    margin: 0 auto 18px !important;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Delete icon */
+.delete-popup .icon {
+    background: #fee2e2;
+}
+
+.delete-popup .icon i {
+    font-size: 34px !important;
+    color: #dc2626 !important;
+}
+
+/* Success icon */
+.success-popup .icon {
+    background: #dcfce7;
+}
+
+.success-popup .icon i {
+    font-size: 34px !important;
+    color: #16a34a !important;
+}
+
+/* Warning icon */
+.warning-popup .icon {
+    background: #fef3c7;
+}
+
+.warning-popup .icon i {
+    font-size: 34px !important;
+    color: #f59e0b !important;
+}
+
+/* =============================================
+   POPUP TITLE
+============================================= */
+.delete-popup h2,
+.success-popup h2,
+.warning-popup h2 {
+    font-size: 26px !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    margin-bottom: 10px !important;
+    font-family: 'Segoe UI', Arial, sans-serif !important;
+}
+
+/* =============================================
+   POPUP DESCRIPTION
+============================================= */
+.delete-popup p,
+.success-popup p,
+.warning-popup p {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: #64748b !important;
+    margin-bottom: 28px !important;
+    line-height: 1.6 !important;
+}
+
+/* =============================================
+   BUTTON WRAPPER
+============================================= */
+.popup-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 14px !important;
+}
+
+/* =============================================
+   POPUP BUTTON STYLE
+============================================= */
+.confirm-delete-btn,
+.cancel-popup-btn,
+.success-popup button,
+.warning-popup button {
+    padding: 14px 26px !important;
+    border-radius: 14px !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    cursor: pointer;
+    text-decoration: none;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+/* Cancel */
+.cancel-popup-btn {
+    background: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+.cancel-popup-btn:hover {
+    background: #cbd5e1 !important;
+}
+
+/* Delete */
+.confirm-delete-btn {
+    background: linear-gradient(90deg, #dc2626, #ef4444) !important;
+    color: white !important;
+    box-shadow: 0 8px 18px rgba(220,38,38,0.25) !important;
+}
+
+.confirm-delete-btn:hover {
+    transform: translateY(-2px);
+}
+
+/* Success */
+.success-popup button {
+    background: linear-gradient(90deg, #16a34a, #22c55e) !important;
+    color: white !important;
+}
+
+/* Warning */
+.warning-popup button {
+    background: linear-gradient(90deg, #d97706, #f59e0b) !important;
+    color: white !important;
+}
+
+/* =============================================
+   POPUP ANIMATION
+============================================= */
+@keyframes popupFade {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* =============================================
+   RESPONSIVE DESIGN
+============================================= */
+@media (max-width: 992px) {
+
+    /* Adjust content width and balanced spacing */
+    .main-content {
+        margin-left: 220px;
+        width: calc(100% - 220px);
+        padding: 28px 35px 40px 35px;
+    }
+
+    body::before {
+        left: 220px;
+        width: calc(100% - 220px);
+    }
+
+    .profile-container {
+        max-width: 100%;
+        padding: 35px;
+    }
+}
+
+@media (max-width: 768px) {
+
+    /* Add balanced left/right spacing */
+    .main-content {
+        margin-left: 0;
+        margin-top: 30px;
+        width: 100%;
+        padding: 20px 28px 30px 28px;
+    }
+
+    body::before {
+        left: 0;
+        width: 100%;
+    }
+
+    /* Title alignment */
+    .main-content h1 {
+        font-size: 30px;
+        margin-bottom: 25px;
+    }
+
+    /* Container centered with better spacing */
+    .profile-container {
+        padding: 25px 28px;
+        border-radius: 24px;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Profile image */
+    .profile-image-preview {
+        width: 120px;
+        height: 120px;
+    }
+
+    /* Upload spacing */
+    .upload-group {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    /* Form spacing */
+    .form-group {
+        margin-bottom: 22px;
+    }
+
+    /* Input consistency */
+    .form-group input {
+        padding: 16px 18px;
+        font-size: 15px;
+    }
+
+    /* Button stack */
+    .form-actions {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    /* Full width buttons */
+    .save-btn,
+    .delete-image-btn,
+    .cancel-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Profile topbar */
+    .profile-btn {
+        width: 100%;
+        max-width: 320px;
+    }
+
+    /* Dropdown center */
+    .dropdown-content {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+}

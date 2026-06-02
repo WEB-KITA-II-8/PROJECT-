@@ -1,0 +1,206 @@
+/* ==========================================================================
+   1. CORE STYLES & RESET
+   ========================================================================== */
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+body{
+    background: #eef1f6;
+}
+
+/* ==========================================================================
+   2. LAYOUT SECTIONS
+   ========================================================================== */
+/* MAIN CONTENT STRUCURE */
+.main-content{
+    margin-left: 270px;
+    padding: 40px;
+}
+
+/* PAGE HEADER ELEMENT */
+.page-header{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 35px;
+}
+
+.page-left h1{
+    font-size: 52px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 10px;
+}
+
+.page-left p{
+    font-size: 18px;
+    color: #64748b;
+}
+
+/* NAVIGATION LINK */
+.back-btn{
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 600;
+    margin-bottom: 20px;
+    font-size: 18px;
+}
+
+/* ==========================================================================
+   3. FORM CARD & INPUT GRID
+   ========================================================================== */
+/* CONTAINER BACKGROUND */
+.form-card{
+    background: #fff;
+    border-radius: 32px;
+    padding: 40px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+}
+
+/* TWO-COLUMN GRID SETUP */
+.form-grid{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    width: 100%;
+}
+
+/* SINGLE FIELD GROUP Wrapper */
+.form-group{
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label{
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #1e293b;
+}
+
+/* FIELDS STYLING (INPUTS & SELECT DROPDOWNS) */
+.form-group input,
+.form-group select{
+    height: 60px;
+    border: 1px solid #dbe2ea;
+    border-radius: 18px;
+    padding: 0 20px;
+    font-size: 18px;
+    outline: none;
+    background: #fff;
+}
+
+/* ==========================================================================
+   4. SYSTEM ALERTS
+   ========================================================================== */
+.alert {
+    padding: 16px 24px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.alert-success {
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.alert-error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+/* ==========================================================================
+   5. ACTION BUTTONS (LEFT-ALIGNED & FLEX REVERSED)
+   ========================================================================== */
+.button-group{
+    display: flex;
+    justify-content: flex-start; /* Aligns items directly to the left edge */
+    align-items: center;
+    gap: 18px;
+    margin-top: 15px;
+    grid-column: 1 / span 2;      /* Spans neatly under both data columns */
+    width: 100%;
+    flex-direction: row;
+}
+
+.cancel-btn, 
+.save-btn{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 56px;                /* Strict block dimensions constraint layout pop */
+    padding: 0 35px;
+    border-radius: 16px;
+    font-size: 18px;
+    font-weight: 700;
+    text-decoration: none;
+    box-sizing: border-box;
+    white-space: nowrap;         /* Keeps copy on a single line */
+}
+
+.cancel-btn{
+    background: #e5e7eb;
+    color: #111827;
+    order: 2;                   /* Shifts cancel block visually into second slot */
+}
+
+.save-btn{
+    border: none;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+    gap: 10px;
+    order: 1;                   /* Anchors main blue button on the far left position */
+}
+
+.save-btn:hover{
+    background: #1d4ed8;
+}
+
+/* ==========================================================================
+   6. RESPONSIVE BREAKPOINTS (MOBILE TO TABLET)
+   ========================================================================== */
+@media(max-width:900px){
+
+    .main-content{
+        margin-left: 0;
+        padding: 20px;
+    }
+
+    .form-grid{
+        grid-template-columns: 1fr; /* Form turns into stacked one-column grid */
+    }
+
+    .page-left h1{
+        font-size: 40px;
+    }
+
+    .button-group {
+        grid-column: span 1;
+        flex-direction: column;    /* Stack buttons beautifully on small phone screens */
+    }
+
+    .cancel-btn, 
+    .save-btn {
+        width: 100%;               /* Buttons take full fluid card width on mobile */
+    }
+    
+    .cancel-btn {
+        order: 2;                  /* Keeps standard order layout stacked cleanly */
+    }
+    
+    .save-btn {
+        order: 1;
+    }
+}

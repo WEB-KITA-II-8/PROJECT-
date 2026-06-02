@@ -1,0 +1,34 @@
+body{
+
+    background:#f5f7fb;
+    font-family:Arial, sans-serif;
+}
+
+.page-title{
+
+    font-size:32px;
+    font-weight:bold;
+    color:#0d6efd;
+}
+
+.card{
+
+    border:none;
+    border-radius:15px;
+}
+
+.table th{
+
+    background:#0d6efd;
+    color:white;
+}
+
+.modal-content{
+
+    border-radius:15px;
+}
+
+.btn-action{
+
+    margin-right:5px;
+}

@@ -1,0 +1,56 @@
+/*=============================================
+COMMITTEE PROFILE PAGE
+FILE: css/profile_committee.css
+=============================================*/
+
+/* =============================================
+   IMPORT ADMIN PROFILE BASE STYLE
+============================================= */
+@import url('profile_admin.css');
+
+/* =============================================
+   MEMBERSHIP BOX CUSTOM FOR COMMITTEE
+============================================= */
+.membership-box {
+    background: #eff6ff;
+    padding: 25px;
+    border-radius: 18px;
+    border: 1px solid #bfdbfe;
+    margin-top: 10px;
+}
+
+.membership-box h3 {
+    font-size: 20px;
+    font-weight: 800;
+    color: #1d4ed8;
+    margin-bottom: 20px;
+}
+
+.membership-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+}
+
+.membership-grid div {
+    font-size: 15px;
+    color: #334155;
+    font-weight: 500;
+    line-height: 1.7;
+}
+
+.membership-grid strong {
+    color: #0f172a;
+    font-weight: 800;
+}
+
+/* =============================================
+   RESPONSIVE MEMBERSHIP
+============================================= */
+@media (max-width: 768px) {
+
+    .membership-grid {
+        grid-template-columns: 1fr;
+    }
+
+}
