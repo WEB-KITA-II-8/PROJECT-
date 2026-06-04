@@ -3,21 +3,29 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// 1. Include your database connection file
+include '../db_connect.php';
 
-$clubs = [
-    ["id" => 1, "name" => "Robotics Club", "advisor" => "Dr. Ahmad", "members" => 45, "status" => "Active"],
-    ["id" => 2, "name" => "Photography Club", "advisor" => "Pn. Sarah", "members" => 30, "status" => "Inactive"],
-    ["id" => 3, "name" => "Coding Club", "advisor" => "Mr. Daniel", "members" => 60, "status" => "Active"]
-];
+// 2. Fetch the club data dynamically from the database
+$query = "SELECT id, club_name, advisor_name, total_members, status FROM clubs_comm ORDER BY id DESC";
+$result = mysqli_query($conn, $query);
+
+$clubs = [];
+if ($result) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $clubs[] = $row;
+    }
+} else {
+    // Optional error handler if the query fails
+    $db_error = "Error fetching clubs: " . mysqli_error($conn);
+}
 ?>
 
 <?php include('../Includes/header_admin.php'); ?>
 <?php include('../Includes/sidebar_admin.php'); ?>
 
-<!-- MAIN CONTENT (MATCH USERS STYLE) -->
 <div class="main-content">
 
-    <!-- PAGE HEADER -->
     <div class="page-header">
         <h1>Manage Clubs</h1>
 
@@ -27,7 +35,10 @@ $clubs = [
         </a>
     </div>
 
-    <!-- SEARCH AREA (same as users style) -->
+    <?php if (isset($db_error)): ?>
+        <div class="error-msg" style="color: red; margin-bottom: 15px;"><?= $db_error; ?></div>
+    <?php endif; ?>
+
     <div class="search-form">
 
         <div class="search-box">
@@ -43,7 +54,6 @@ $clubs = [
 
     </div>
 
-    <!-- TABLE -->
     <div class="table-container">
 
         <table class="club-table">
@@ -60,35 +70,43 @@ $clubs = [
             </thead>
 
             <tbody>
-            <?php foreach($clubs as $index => $club){ ?>
+            <?php if (!empty($clubs)){ ?>
+                <?php foreach($clubs as $index => $club){ ?>
+                    <tr>
+                        <td><?= $index + 1 ?></td>
+
+                        <td><?= htmlspecialchars($club['club_name']); ?></td>
+
+                        <td><?= htmlspecialchars($club['advisor_name']); ?></td>
+
+                        <td><?= htmlspecialchars($club['total_members']); ?></td>
+
+                        <td>
+                            <?php if($club['status'] == "Active"){ ?>
+                                <span class="status-badge active">Active</span>
+                            <?php } else { ?>
+                                <span class="status-badge inactive">Inactive</span>
+                            <?php } ?>
+                        </td>
+
+                        <td class="action-buttons">
+
+                            <a href="edit_club.php?id=<?= $club['id']; ?>" class="edit-btn">
+                                <i class="fa-solid fa-pen"></i>
+                            </a>
+
+                            <a href="#" class="delete-btn"
+                               onclick="openDeleteModal(<?= $club['id']; ?>, '<?= addslashes($club['club_name']); ?>')">
+                                <i class="fa-solid fa-trash"></i>
+                            </a>
+
+                        </td>
+                    </tr>
+                <?php } ?>
+            <?php } else { ?>
                 <tr>
-                    <td><?= $index + 1 ?></td>
-
-                    <td><?= htmlspecialchars($club['name']); ?></td>
-
-                    <td><?= htmlspecialchars($club['advisor']); ?></td>
-
-                    <td><?= $club['members']; ?></td>
-
-                    <td>
-                        <?php if($club['status'] == "Active"){ ?>
-                            <span class="status-badge active">Active</span>
-                        <?php } else { ?>
-                            <span class="status-badge inactive">Inactive</span>
-                        <?php } ?>
-                    </td>
-
-                    <td class="action-buttons">
-
-                        <a href="#" class="edit-btn">
-                            <i class="fa-solid fa-pen"></i>
-                        </a>
-
-                        <a href="#" class="delete-btn"
-                           onclick="openDeleteModal(<?= $club['id']; ?>, '<?= addslashes($club['name']); ?>')">
-                            <i class="fa-solid fa-trash"></i>
-                        </a>
-
+                    <td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">
+                        No clubs found. Click "Add Club" to create one!
                     </td>
                 </tr>
             <?php } ?>
@@ -100,7 +118,6 @@ $clubs = [
 
 </div>
 
-<!-- DELETE MODAL (same style as users page) -->
 <div id="deleteModal" class="custom-modal">
 
     <div class="custom-modal-content">
@@ -129,7 +146,6 @@ $clubs = [
 
 </div>
 
-<!-- SCRIPT (YOUR ORIGINAL LOGIC KEPT) -->
 <script>
 
 // DELETE MODAL
@@ -146,7 +162,7 @@ function closeDeleteModal(){
     document.getElementById("deleteModal").style.display = "none";
 }
 
-// FILTER (YOUR ORIGINAL CLIENT-SIDE FILTER)
+// FILTER (Your original client-side filter still works perfectly)
 document.addEventListener("DOMContentLoaded", function(){
 
     const searchInput = document.querySelector('.search-box input');
@@ -158,6 +174,8 @@ document.addEventListener("DOMContentLoaded", function(){
         const selectedStatus = statusFilter.value;
 
         tableRows.forEach(row => {
+            // Skips processing if the row displays the "No clubs found" text 
+            if(row.children.length < 6) return; 
 
             const clubName = row.children[1].textContent.toLowerCase();
             const clubStatus = row.children[4].textContent.trim();
@@ -169,9 +187,10 @@ document.addEventListener("DOMContentLoaded", function(){
         });
     }
 
-    searchInput.addEventListener('keyup', filterTable);
-    statusFilter.addEventListener('change', filterTable);
-
+    if(searchInput && statusFilter) {
+        searchInput.addEventListener('keyup', filterTable);
+        statusFilter.addEventListener('change', filterTable);
+    }
 });
 
 </script>

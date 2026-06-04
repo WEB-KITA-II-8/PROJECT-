@@ -15,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['save_member'])) {
     $host     = "localhost";
     $db_user  = "root";
     $db_pass  = "";
-    $db_name  = "your_database_name"; 
+    $db_name  = "fk_student_club_event"; 
 
     $conn = new mysqli($host, $db_user, $db_pass, $db_name);
 
