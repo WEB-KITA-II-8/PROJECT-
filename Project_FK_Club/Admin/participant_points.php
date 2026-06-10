@@ -186,7 +186,10 @@ $recognition_levels = [
         <!-- Points Chart -->
         <div class="pp-card pp-chart-card">
             <h2><i class="fa-solid fa-chart-pie"></i> Points Distribution</h2>
-            <canvas id="pointsDistChart" height="10"></canvas>
+
+            <div class="pp-chart-container">
+            <canvas id="pointsDistChart"></canvas>
+            </div>
         </div>
 
     </div>
@@ -314,8 +317,20 @@ new Chart(distCtx, {
 .pp-level-body p{font-size:12px;color:#94a3b8;margin:4px 0 8px;}
 .pp-level-count{font-size:22px;font-weight:800;color:#1e293b;}
 .pp-section-row{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-bottom:0;}
-.pp-card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.05);}
 .pp-card h2{font-size:16px;font-weight:700;color:#1e293b;margin-bottom:18px;display:flex;align-items:center;gap:10px;}
+.pp-chart-card{
+    background:#fff;border-radius:16px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.05);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+.pp-chart-container{
+    width:100%;
+    max-width:425px;   /* adjust size here */
+    height:425px;
+    margin:auto;
+}
 .pp-ranking-list{display:flex;flex-direction:column;gap:12px;}
 .pp-rank-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;
     background:#f8fafc;border:1px solid #f1f5f9;}

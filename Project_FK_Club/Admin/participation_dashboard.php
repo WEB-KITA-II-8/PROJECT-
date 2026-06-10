@@ -219,43 +219,7 @@ $months_result = mysqli_query($conn,
     </div>
 
     <!-- FILTER BAR -->
-    <div class="filter-section">
-        <form method="GET" class="filter-controls" id="filterForm">
-            <div class="filter-group">
-                <label><i class="fa-solid fa-layer-group"></i> Club</label>
-                <select name="club" class="filter-select" onchange="this.form.submit()">
-                    <option value="all">All Clubs</option>
-                    <?php while ($c = mysqli_fetch_assoc($all_clubs_result)): ?>
-                        <option value="<?php echo htmlspecialchars($c['club_name']); ?>"
-                            <?php echo ($filter_club === $c['club_name']) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($c['club_name']); ?>
-                        </option>
-                    <?php endwhile; ?>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label><i class="fa-solid fa-calendar"></i> Month</label>
-                <select name="month" class="filter-select" onchange="this.form.submit()">
-                    <option value="all">All Time</option>
-                    <?php
-                    mysqli_data_seek($months_result, 0);
-                    while ($m = mysqli_fetch_assoc($months_result)):
-                    ?>
-                        <option value="<?php echo $m['m']; ?>"
-                            <?php echo ($filter_month === $m['m']) ? 'selected' : ''; ?>>
-                            <?php echo $m['label']; ?>
-                        </option>
-                    <?php endwhile; ?>
-                </select>
-            </div>
-            <?php if ($filter_club !== 'all' || $filter_month !== 'all'): ?>
-                <a href="participation_dashboard.php" class="btn-clear">
-                    <i class="fa-solid fa-xmark"></i> Clear
-                </a>
-            <?php endif; ?>
-        </form>
-    </div>
-
+   
     <!-- QUICK NAVIGATION CARDS -->
     <div class="navigation-cards">
         <a href="manage_event_attendance.php" class="nav-card">
@@ -334,34 +298,49 @@ $months_result = mysqli_query($conn,
         </div>
 
         <!-- Status Breakdown Pie -->
-        <div class="chart-card chart-small">
-            <h2><i class="fa-solid fa-circle-half-stroke"></i> Status Breakdown</h2>
-            <canvas id="pieChart" height="200"></canvas>
-            <div class="pie-legend" id="pieLegend"></div>
-        </div>
 
     </div>
 
-    <!-- CHARTS ROW 2 -->
-    <div class="charts-section">
+    <div class="attendance-chart-layout">
 
-        <!-- Most Active Clubs Bar -->
-        <div class="chart-card chart-medium">
-            <h2><i class="fa-solid fa-layer-group"></i> Most Active Clubs</h2>
-            <?php if (empty($clubs_data)): ?>
-                <div class="empty-state"><i class="fa-solid fa-chart-bar"></i><p>No club data yet</p></div>
-            <?php else: ?>
-                <canvas id="clubsChart" height="180"></canvas>
+        <!-- LEFT SIDE -->
+            <div class="chart-card pie-card">
+            <h2>
+                 <i class="fa-solid fa-circle-half-stroke"></i>
+            Status Breakdown
+            </h2>
+
+                <canvas id="pieChart"></canvas>
+
+                <div class="pie-legend" id="pieLegend"></div>
+            </div>
+
+    <!-- RIGHT SIDE -->
+    <div class="right-column">
+
+        <div class="chart-card">
+            <h2>
+                <i class="fa-solid fa-layer-group"></i>
+                Most Active Clubs
+            </h2>
+
+            <?php if (!empty($clubs_data)): ?>
+                <canvas id="clubsChart"></canvas>
             <?php endif; ?>
         </div>
 
-        <!-- Points Distribution -->
-        <div class="chart-card chart-medium">
-            <h2><i class="fa-solid fa-trophy"></i> Recognition Level Distribution</h2>
-            <canvas id="distChart" height="180"></canvas>
+        <div class="chart-card">
+            <h2>
+                <i class="fa-solid fa-trophy"></i>
+                Recognition Level Distribution
+            </h2>
+
+            <canvas id="distChart"></canvas>
         </div>
 
     </div>
+
+</div>
 
     <!-- TOP STUDENTS TABLE -->
     <div class="chart-card" style="margin-top:24px;">
@@ -589,6 +568,38 @@ new Chart(distCtx, {
     margin-bottom:24px;flex-wrap:wrap;gap:12px; }
 .page-header h1 { font-size:24px;font-weight:800;color:#1e293b;margin:0; }
 .page-header p { font-size:14px;color:#64748b;margin:4px 0 0; }
+
+.attendance-chart-layout{
+    display:flex;
+    gap:20px;
+    margin-bottom:24px;
+}
+
+.pie-card{
+    width:50%;
+    min-height:700px;
+}
+
+.right-column{
+    width:50%;
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+}
+
+.right-column .chart-card{
+    flex:1;
+}
+
+#pieChart{
+    max-height:550px !important;
+}
+
+#clubsChart,
+#distChart{
+    max-height:250px !important;
+}
+
 @media(max-width:900px){
     .summary-cards,.navigation-cards,.charts-section{grid-template-columns:1fr 1fr;}
     .chart-large,.chart-small,.chart-medium{grid-column:span 2;}
