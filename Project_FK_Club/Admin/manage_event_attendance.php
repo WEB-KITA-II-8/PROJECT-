@@ -1,35 +1,94 @@
 <?php
 // =============================================
-// MANAGE EVENT ATTENDANCE
-// FILE: manage_event_attendance.php
+// MANAGE EVENT ATTENDANCE (PER-EVENT)
+// FILE: Admin/manage_event_attendance.php
+// MODULE 4 — Record & manage attendance for
+//             ONE specific event at a time.
+//
+// USAGE:
+//   manage_event_attendance.php?event_id=5
+//
+// Flow:
+//   event_attendance_list.php
+//     → click "Manage Attendance"
+//     → this page (event_id in URL)
 // =============================================
 
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Database connection
 include '../db_connect.php';
 
 // =============================================
 // SECURITY CHECK
 // =============================================
 if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'committee'])) {
-    header("Location: Project/index.php");
+    header("Location: ../index.php");
     exit();
 }
 
-// =============================================
-// USER SESSION DATA
-// =============================================
-$user_id = $_SESSION['user_id'] ?? 1;
 $user_name = $_SESSION['full_name'] ?? 'User';
 $user_role = $_SESSION['role'] ?? 'admin';
 
 // =============================================
-// INITIALIZE EVENT ATTENDANCE TABLE IF NOT EXISTS
+// REQUIRE event_id — redirect back if missing
 // =============================================
-$create_table_query = "
+if (empty($_GET['event_id'])) {
+    header("Location: event_attendance_list.php");
+    exit();
+}
+
+$event_id = intval($_GET['event_id']);
+
+// =============================================
+// FETCH THIS EVENT'S DETAILS
+// Try events_comm first (richer), fall back to events
+// =============================================
+$event = null;
+
+// Try events_comm first
+$r = mysqli_query($conn, "SELECT * FROM events_comm WHERE event_id = $event_id LIMIT 1");
+if ($r && mysqli_num_rows($r) > 0) {
+    $raw = mysqli_fetch_assoc($r);
+    $event = [
+        'event_id'       => $raw['event_id'],
+        'event_name'     => $raw['event_name'],
+        'event_date'     => date('Y-m-d', strtotime($raw['event_start_datetime'])),
+        'event_time'     => date('g:i A', strtotime($raw['event_start_datetime'])),
+        'event_location' => $raw['event_location'],
+        'event_status'   => $raw['event_status'],
+    ];
+} else {
+    // Fall back to simpler events table
+    $r2 = mysqli_query($conn, "SELECT * FROM events WHERE event_id = $event_id LIMIT 1");
+    if ($r2 && mysqli_num_rows($r2) > 0) {
+        $raw = mysqli_fetch_assoc($r2);
+        $event = [
+            'event_id'       => $raw['event_id'],
+            'event_name'     => $raw['event_name'],
+            'event_date'     => $raw['event_date'],
+            'event_time'     => '',
+            'event_location' => $raw['event_location'] ?? '',
+            'event_status'   => 'Active',
+        ];
+    }
+}
+
+if (!$event) {
+    header("Location: event_attendance_list.php?error=not_found");
+    exit();
+}
+
+$event_name     = $event['event_name'];
+$event_date     = $event['event_date'];
+$event_time     = $event['event_time'];
+$event_location = $event['event_location'];
+
+// =============================================
+// ENSURE event_attendance TABLE EXISTS
+// =============================================
+mysqli_query($conn, "
     CREATE TABLE IF NOT EXISTS event_attendance (
         attendance_id INT PRIMARY KEY AUTO_INCREMENT,
         event_id INT,
@@ -40,673 +99,1024 @@ $create_table_query = "
         club_name VARCHAR(255),
         check_in_time TIME,
         attendance_date DATE,
-        attendance_status ENUM('present', 'late', 'absent', 'volunteer') DEFAULT 'present',
+        attendance_status ENUM('present','late','absent','volunteer') DEFAULT 'present',
         points_awarded INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     )
-";
-mysqli_query($conn, $create_table_query);
+");
 
 // =============================================
-// FETCH SUMMARY STATISTICS
+// POINTS HELPER
 // =============================================
-$today = date('Y-m-d');
-
-// Total Registered (today)
-$total_registered = 0;
-$new_today = 0;
-$result = mysqli_query($conn, "SELECT COUNT(*) as count FROM event_attendance WHERE attendance_date = '$today'");
-if ($result) {
-    $row = mysqli_fetch_assoc($result);
-    $total_registered = $row['count'] ?? 0;
-    $new_today = $total_registered;
+function calcPoints($status) {
+    switch ($status) {
+        case 'present':   return 10;
+        case 'late':      return 5;
+        case 'absent':    return -10;
+        case 'volunteer': return 15;   // present +10  + volunteer +5
+        default:          return 0;
+    }
 }
 
-// Present Count
-$present_count = 0;
-$result = mysqli_query($conn, "SELECT COUNT(*) as count FROM event_attendance WHERE attendance_date = '$today' AND attendance_status IN ('present', 'volunteer')");
-if ($result) {
-    $row = mysqli_fetch_assoc($result);
-    $present_count = $row['count'] ?? 0;
-}
-
-// Calculate attendance percentage
-$attendance_rate = $total_registered > 0 ? round(($present_count / $total_registered) * 100, 1) : 0;
-
-// Late Arrivals
-$late_count = 0;
-$result = mysqli_query($conn, "SELECT COUNT(*) as count FROM event_attendance WHERE attendance_date = '$today' AND attendance_status = 'late'");
-if ($result) {
-    $row = mysqli_fetch_assoc($result);
-    $late_count = $row['count'] ?? 0;
-}
-
-// Absent
-$absent_count = 0;
-$result = mysqli_query($conn, "SELECT COUNT(*) as count FROM event_attendance WHERE attendance_date = '$today' AND attendance_status = 'absent'");
-if ($result) {
-    $row = mysqli_fetch_assoc($result);
-    $absent_count = $row['count'] ?? 0;
+function statusColor($status) {
+    switch ($status) {
+        case 'present':   return '#10b981';
+        case 'late':      return '#f59e0b';
+        case 'absent':    return '#ef4444';
+        case 'volunteer': return '#7c3aed';
+        default:          return '#6b7280';
+    }
 }
 
 // =============================================
-// HANDLE MARK ATTENDANCE
+// HANDLE: MARK ATTENDANCE (POST)
 // =============================================
-$mark_message = '';
-$mark_type = '';
+$flash_message = '';
+$flash_type    = '';
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'mark_attendance') {
-    $event_name = mysqli_real_escape_string($conn, $_POST['event_name'] ?? '');
-    $event_date = mysqli_real_escape_string($conn, $_POST['event_date'] ?? '');
-    $student_id = mysqli_real_escape_string($conn, $_POST['student_id'] ?? '');
-    $attendance_status = mysqli_real_escape_string($conn, $_POST['attendance_status'] ?? 'present');
-    $check_in_time = date('H:i:s');
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
 
-    if (!empty($event_name) && !empty($event_date) && !empty($student_id)) {
-        // Get student info
-        $student_query = "SELECT user_id, full_name FROM users WHERE user_id = '$student_id' AND role = 'student'";
-        $student_result = mysqli_query($conn, $student_query);
+    // ---- ADD / MARK ----
+    if ($action === 'mark_attendance') {
+        $input_student_id   = mysqli_real_escape_string($conn, trim($_POST['student_id'] ?? ''));
+        $attendance_status  = mysqli_real_escape_string($conn, $_POST['attendance_status'] ?? 'present');
+        $check_in_time      = date('H:i:s');
 
-        if ($student_result && mysqli_num_rows($student_result) > 0) {
-            $student = mysqli_fetch_assoc($student_result);
-            $student_name = $student['full_name'];
-            $user_id_found = $student['user_id'];
+        if (!empty($input_student_id)) {
+            // Find user by student_id OR user_id
+            $sq = "SELECT user_id, full_name, student_id
+                   FROM users
+                   WHERE (student_id = '$input_student_id' OR user_id = '$input_student_id')
+                     AND role = 'student'
+                   LIMIT 1";
+            $sr = mysqli_query($conn, $sq);
 
-            // Get club info
-            $club_query = "SELECT c.club_name FROM memberships m 
-                          JOIN clubs c ON m.club_id = c.club_id 
-                          WHERE m.user_id = '$user_id_found' LIMIT 1";
-            $club_result = mysqli_query($conn, $club_query);
-            $club_name = 'N/A';
-            if ($club_result && mysqli_num_rows($club_result) > 0) {
-                $club = mysqli_fetch_assoc($club_result);
-                $club_name = $club['club_name'];
+            if ($sr && mysqli_num_rows($sr) > 0) {
+                $student    = mysqli_fetch_assoc($sr);
+                $uid        = $student['user_id'];
+                $sname      = mysqli_real_escape_string($conn, $student['full_name']);
+                $sid        = mysqli_real_escape_string($conn, $student['student_id'] ?: $student['user_id']);
+
+                // Check duplicate for this event
+                $dup = mysqli_query($conn, "SELECT attendance_id FROM event_attendance
+                                            WHERE event_id = $event_id AND user_id = $uid LIMIT 1");
+                if ($dup && mysqli_num_rows($dup) > 0) {
+                    $flash_message = "⚠ Attendance already recorded for $sname in this event.";
+                    $flash_type    = 'warning';
+                } else {
+                    // Get club
+                    $cr    = mysqli_query($conn, "SELECT c.club_name FROM memberships m
+                                                  JOIN clubs c ON m.club_id = c.club_id
+                                                  WHERE m.user_id = $uid LIMIT 1");
+                    $cname = ($cr && mysqli_num_rows($cr) > 0)
+                           ? mysqli_real_escape_string($conn, mysqli_fetch_assoc($cr)['club_name'])
+                           : 'N/A';
+
+                    $pts = calcPoints($attendance_status);
+                    $en  = mysqli_real_escape_string($conn, $event_name);
+
+                    $ins = "INSERT INTO event_attendance
+                            (event_id, user_id, event_name, student_id, student_name,
+                             club_name, check_in_time, attendance_date, attendance_status, points_awarded)
+                            VALUES ($event_id, $uid, '$en', '$sid', '$sname',
+                                    '$cname', '$check_in_time', '$event_date', '$attendance_status', $pts)";
+
+                    if (mysqli_query($conn, $ins)) {
+                        header("Location: manage_event_attendance.php?event_id=$event_id&success=marked");
+                        exit();
+                    } else {
+                        $flash_message = "✗ DB error: " . mysqli_error($conn);
+                        $flash_type    = 'error';
+                    }
+                }
+            } else {
+                $flash_message = "✗ Student ID \"$input_student_id\" not found.";
+                $flash_type    = 'error';
             }
+        } else {
+            $flash_message = "✗ Please enter a Student ID.";
+            $flash_type    = 'error';
+        }
+    }
 
-            // Calculate points
-            $points = 0;
-            switch ($attendance_status) {
-                case 'present':
-                    $points = 10;
-                    break;
-                case 'late':
-                    $points = 5;
-                    break;
-                case 'absent':
-                    $points = -10;
-                    break;
-                case 'volunteer':
-                    $points = 15;
-                    break;
-            }
+    // ---- EDIT STATUS ----
+    if ($action === 'edit_attendance') {
+        $att_id    = intval($_POST['attendance_id'] ?? 0);
+        $new_status = mysqli_real_escape_string($conn, $_POST['attendance_status'] ?? 'present');
+        $new_pts    = calcPoints($new_status);
 
-            // Insert attendance record
-            $insert_query = "INSERT INTO event_attendance 
-                            (event_name, student_id, student_name, club_name, check_in_time, attendance_date, attendance_status, points_awarded, user_id)
-                            VALUES ('$event_name', '$student_id', '$student_name', '$club_name', '$check_in_time', '$event_date', '$attendance_status', $points, $user_id_found)";
-
-            if (mysqli_query($conn, $insert_query)) {
-                $mark_message = "✓ Attendance marked successfully for $student_name";
-                $mark_type = 'success';
-                // Redirect to refresh the page and show updated list
-                header("Location: manage_event_attendance.php");
+        if ($att_id > 0) {
+            $upd = "UPDATE event_attendance
+                    SET attendance_status = '$new_status', points_awarded = $new_pts
+                    WHERE attendance_id = $att_id AND event_id = $event_id";
+            if (mysqli_query($conn, $upd)) {
+                header("Location: manage_event_attendance.php?event_id=$event_id&success=updated");
                 exit();
             } else {
-                $mark_message = "✗ Error marking attendance: " . mysqli_error($conn);
-                $mark_type = 'error';
+                $flash_message = "✗ Update failed: " . mysqli_error($conn);
+                $flash_type    = 'error';
             }
-        } else {
-            $mark_message = "✗ Student ID not found";
-            $mark_type = 'error';
         }
-    } else {
-        $mark_message = "✗ Please fill all required fields";
-        $mark_type = 'error';
     }
-}
 
-// =============================================
-// HANDLE EDIT ATTENDANCE
-// =============================================
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'edit_attendance') {
-    $attendance_id = intval($_POST['attendance_id'] ?? 0);
-    $attendance_status = mysqli_real_escape_string($conn, $_POST['attendance_status'] ?? 'present');
-
-    if ($attendance_id > 0) {
-        // Calculate new points
-        $points = 0;
-        switch ($attendance_status) {
-            case 'present':
-                $points = 10;
-                break;
-            case 'late':
-                $points = 5;
-                break;
-            case 'absent':
-                $points = -10;
-                break;
-            case 'volunteer':
-                $points = 15;
-                break;
-        }
-
-        $update_query = "UPDATE event_attendance SET attendance_status = '$attendance_status', points_awarded = $points WHERE attendance_id = $attendance_id";
-
-        if (mysqli_query($conn, $update_query)) {
-            $mark_message = "✓ Attendance updated successfully";
-            $mark_type = 'success';
-            header("Location: manage_event_attendance.php");
-            exit();
-        } else {
-            $mark_message = "✗ Error updating attendance: " . mysqli_error($conn);
-            $mark_type = 'error';
+    // ---- DELETE ----
+    if ($action === 'delete_attendance') {
+        $att_id = intval($_POST['attendance_id'] ?? 0);
+        if ($att_id > 0) {
+            $del = "DELETE FROM event_attendance WHERE attendance_id = $att_id AND event_id = $event_id";
+            if (mysqli_query($conn, $del)) {
+                header("Location: manage_event_attendance.php?event_id=$event_id&success=deleted");
+                exit();
+            } else {
+                $flash_message = "✗ Delete failed: " . mysqli_error($conn);
+                $flash_type    = 'error';
+            }
         }
     }
 }
 
-// =============================================
-// HANDLE DELETE ATTENDANCE
-// =============================================
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'delete_attendance') {
-    $attendance_id = intval($_POST['attendance_id'] ?? 0);
-
-    if ($attendance_id > 0) {
-        $delete_query = "DELETE FROM event_attendance WHERE attendance_id = $attendance_id";
-
-        if (mysqli_query($conn, $delete_query)) {
-            $mark_message = "✓ Attendance record deleted successfully";
-            $mark_type = 'success';
-            header("Location: manage_event_attendance.php");
-            exit();
-        } else {
-            $mark_message = "✗ Error deleting attendance: " . mysqli_error($conn);
-            $mark_type = 'error';
-        }
+// Flash from redirect
+if (empty($flash_message)) {
+    if (isset($_GET['success'])) {
+        $msgs = ['marked' => '✓ Attendance marked successfully.',
+                 'updated' => '✓ Attendance updated.',
+                 'deleted' => '✓ Record deleted.'];
+        $flash_message = $msgs[$_GET['success']] ?? '✓ Done.';
+        $flash_type    = 'success';
     }
 }
 
 // =============================================
-// FETCH ATTENDANCE LIST
+// FETCH ATTENDANCE LIST FOR THIS EVENT
 // =============================================
-$search_query = $_GET['search'] ?? '';
+$search_q = isset($_GET['search']) ? mysqli_real_escape_string($conn, trim($_GET['search'])) : '';
+
+$list_sql = "SELECT * FROM event_attendance WHERE event_id = $event_id";
+if (!empty($search_q)) {
+    $list_sql .= " AND (student_id LIKE '%$search_q%' OR student_name LIKE '%$search_q%')";
+}
+$list_sql .= " ORDER BY check_in_time ASC, created_at ASC";
+
+$list_result = mysqli_query($conn, $list_sql);
 $attendance_list = [];
-
-$list_query = "SELECT * FROM event_attendance WHERE attendance_date = '$today'";
-
-if (!empty($search_query)) {
-    $search_query = mysqli_real_escape_string($conn, $search_query);
-    $list_query .= " AND (student_id LIKE '%$search_query%' OR student_name LIKE '%$search_query%')";
-}
-
-$list_query .= " ORDER BY check_in_time DESC";
-
-$result = mysqli_query($conn, $list_query);
-if ($result) {
-    while ($row = mysqli_fetch_assoc($result)) {
+if ($list_result) {
+    while ($row = mysqli_fetch_assoc($list_result)) {
         $attendance_list[] = $row;
     }
 }
 
-?>
+// =============================================
+// SUMMARY STATS FOR THIS EVENT
+// =============================================
+$stats = ['present' => 0, 'late' => 0, 'absent' => 0, 'volunteer' => 0, 'total' => 0];
+foreach ($attendance_list as $rec) {
+    $stats[$rec['attendance_status']] = ($stats[$rec['attendance_status']] ?? 0) + 1;
+    $stats['total']++;
+}
 
-<title>Manage Event Attendance</title>
+$attended = $stats['present'] + $stats['volunteer'] + $stats['late'];
+$att_rate = $stats['total'] > 0 ? round($attended / $stats['total'] * 100) : 0;
+
+// =============================================
+// FETCH REGISTERED STUDENTS (from event_registrations)
+// so we can show who hasn't been marked yet
+// =============================================
+$reg_result = mysqli_query($conn, "
+    SELECT er.user_id, er.student_name, er.student_email,
+           u.student_id
+    FROM event_registrations er
+    LEFT JOIN users u ON u.user_id = er.user_id
+    WHERE er.event_id = $event_id
+    ORDER BY er.student_name ASC
+");
+$registered_students = [];
+if ($reg_result) {
+    while ($r = mysqli_fetch_assoc($reg_result)) {
+        $registered_students[] = $r;
+    }
+}
+
+// IDs already marked
+$marked_user_ids = array_column($attendance_list, 'user_id');
+
+?>
 
 <?php include '../Includes/header_admin.php'; ?>
 <?php include '../Includes/sidebar_admin.php'; ?>
 
-<!-- =============================================
-TOPBAR
-============================================= -->
-<div class="topbar">
+<style>
+/* =============================================
+   MANAGE EVENT ATTENDANCE (PER EVENT) STYLES
+============================================= */
+.main-content {
+    margin-left: 260px;
+    padding: 28px 30px;
+    min-height: 100vh;
+    background: #f4f7fb;
+}
 
-    <div class="profile-menu">
+/* Breadcrumb */
+.breadcrumb-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 18px;
+}
 
-        <button class="profile-btn" onclick="toggleDropdown()">
+.breadcrumb-bar a {
+    color: #1a73e8;
+    text-decoration: none;
+}
 
-            <div class="profile-info">
-                <span class="profile-name">
-                    <?php echo strtoupper($user_name); ?>
-                </span>
+.breadcrumb-bar a:hover { text-decoration: underline; }
+.breadcrumb-bar i { font-size: 11px; }
 
-                <span class="profile-role">
-                    <?php echo ucfirst($user_role); ?>
-                </span>
-            </div>
+/* Page Header */
+.page-header {
+    background: #fff;
+    border-radius: 16px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+}
 
-            <div class="profile-icon">
-                <i class="fa-solid fa-user"></i>
-            </div>
+.event-title { font-size: 20px; font-weight: 700; color: #0b1f4d; margin: 0 0 6px; }
+.event-details { display: flex; flex-wrap: wrap; gap: 14px; }
+.event-detail-item { font-size: 13px; color: #6b7280; display: flex; align-items: center; gap: 6px; }
+.event-detail-item i { color: #9ca3af; }
 
-        </button>
+.btn-back {
+    background: #f1f5f9;
+    color: #374151;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+.btn-back:hover { background: #e2e8f0; color: #0b1f4d; text-decoration: none; }
 
-        <div class="dropdown-content" id="profileDropdown">
+/* Flash Messages */
+.flash {
+    padding: 13px 18px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.flash.success { background: #d1f5df; color: #15803d; }
+.flash.error   { background: #ffe0e0; color: #dc2626; }
+.flash.warning { background: #fff4db; color: #d97706; }
 
-            <a href="#">
-                <i class="fa-solid fa-user"></i>
-                Manage Profile
-            </a>
+/* Stat Cards */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 22px;
+}
 
-            <a href="Project/logout.php">
-                <i class="fa-solid fa-right-from-bracket"></i>
-                Logout
-            </a>
+.stat-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    text-align: center;
+}
+.stat-card .sv { font-size: 28px; font-weight: 800; line-height: 1; }
+.stat-card .sl { font-size: 12px; color: #6b7280; margin-top: 4px; font-weight: 500; }
+.stat-card .ss { font-size: 11px; color: #9ca3af; margin-top: 3px; }
 
-        </div>
+.sc-total    .sv { color: #1a73e8; }
+.sc-present  .sv { color: #188038; }
+.sc-late     .sv { color: #e37400; }
+.sc-absent   .sv { color: #dc2626; }
+.sc-volunteer .sv { color: #7c3aed; }
 
-    </div>
+/* Two-column layout */
+.two-col {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    align-items: start;
+}
 
-</div>
+/* Panel / Card */
+.panel {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
 
-<!-- =============================================
-MAIN CONTENT
-============================================= -->
+.panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.panel-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0b1f4d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.panel-title i { color: #1a73e8; }
+
+/* Search */
+.search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8fafc;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 7px 12px;
+}
+.search-wrap input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 13px;
+    color: #374151;
+    width: 180px;
+}
+.search-wrap i { color: #9ca3af; font-size: 12px; }
+
+.btn-export {
+    background: #f1f5f9;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: background 0.2s;
+}
+.btn-export:hover { background: #e2e8f0; }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table.att-table { width: 100%; border-collapse: collapse; }
+table.att-table th {
+    background: #f8fafc;
+    color: #374151;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 11px 14px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+table.att-table td {
+    padding: 11px 14px;
+    font-size: 13.5px;
+    color: #374151;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+table.att-table tr:last-child td { border-bottom: none; }
+table.att-table tbody tr:hover { background: #fafbfc; }
+
+.status-pill {
+    display: inline-block;
+    padding: 4px 11px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.pts-cell { font-weight: 700; }
+
+.action-btns { display: flex; gap: 6px; }
+.btn-edit, .btn-del {
+    border: none;
+    border-radius: 7px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
+    font-weight: 600;
+    transition: opacity 0.2s;
+}
+.btn-edit { background: #e8f0fe; color: #1a73e8; }
+.btn-del  { background: #ffe0e0; color: #dc2626; }
+.btn-edit:hover, .btn-del:hover { opacity: 0.8; }
+
+.empty-row td { text-align: center; color: #9ca3af; font-size: 14px; padding: 36px 14px !important; }
+
+/* --- MARK ATTENDANCE FORM (right column) --- */
+.form-panel {
+    position: sticky;
+    top: 20px;
+}
+
+.form-inner { padding: 20px; }
+
+.form-group { margin-bottom: 14px; }
+.form-group label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 6px;
+}
+.form-group input,
+.form-group select {
+    width: 100%;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 13.5px;
+    color: #374151;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+.form-group input:focus,
+.form-group select:focus { border-color: #1a73e8; }
+
+.form-group .locked-field {
+    background: #f8fafc;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+.btn-mark {
+    width: 100%;
+    background: linear-gradient(135deg, #1a73e8, #4f9cf9);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 11px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s;
+    margin-top: 4px;
+}
+.btn-mark:hover { opacity: 0.9; }
+
+.points-hint {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.7;
+}
+.points-hint strong { color: #374151; }
+
+/* Registered students quick-pick */
+.quick-pick {
+    margin-top: 12px;
+}
+.quick-pick-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 8px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.reg-student-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+}
+.reg-student-item {
+    padding: 8px 12px;
+    font-size: 12.5px;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.reg-student-item:last-child { border-bottom: none; }
+.reg-student-item:hover { background: #f0f7ff; }
+.reg-student-item.marked { background: #f0fdf4; color: #15803d; cursor: default; }
+.reg-student-item.marked:hover { background: #f0fdf4; }
+.reg-badge-done {
+    font-size: 10.5px;
+    background: #d1f5df;
+    color: #15803d;
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-weight: 700;
+}
+
+/* QR code */
+.qr-section {
+    padding: 16px 20px;
+    border-top: 1px solid #f1f5f9;
+    text-align: center;
+}
+.qr-section p {
+    font-size: 12px;
+    color: #9ca3af;
+    margin: 8px 0 0;
+}
+#qrcode canvas, #qrcode img {
+    border-radius: 8px;
+}
+
+/* Edit Modal */
+.modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px 30px;
+    width: 380px;
+    max-width: 95%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0b1f4d;
+    margin: 0 0 18px;
+}
+.modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+.btn-confirm {
+    flex: 1;
+    background: #1a73e8;
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.btn-cancel {
+    flex: 1;
+    background: #f1f5f9;
+    color: #374151;
+    border: none;
+    border-radius: 9px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+</style>
+
 <div class="main-content">
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb-bar">
+        <a href="event_attendance_list.php"><i class="fa-solid fa-house"></i> Events List</a>
+        <i class="fa-solid fa-chevron-right"></i>
+        <span><?php echo htmlspecialchars($event_name); ?></span>
+        <i class="fa-solid fa-chevron-right"></i>
+        <span>Manage Attendance</span>
+    </div>
 
     <!-- Page Header -->
     <div class="page-header">
-        <h1>Manage Event Attendance</h1>
-        <p>Record and manage student attendance for club events</p>
+        <div>
+            <h1 class="event-title">
+                <i class="fa-solid fa-calendar-check" style="color:#1a73e8; margin-right:8px;"></i>
+                <?php echo htmlspecialchars($event_name); ?>
+            </h1>
+            <div class="event-details">
+                <div class="event-detail-item">
+                    <i class="fa-solid fa-calendar-day"></i>
+                    <?php echo date('d M Y', strtotime($event_date)); ?>
+                    &nbsp;·&nbsp; <?php echo $event_time; ?>
+                </div>
+                <?php if (!empty($event_location)): ?>
+                <div class="event-detail-item">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <?php echo htmlspecialchars($event_location); ?>
+                </div>
+                <?php endif; ?>
+                <div class="event-detail-item">
+                    <i class="fa-solid fa-users"></i>
+                    <?php echo count($registered_students); ?> registered
+                </div>
+            </div>
+        </div>
+        <a href="event_attendance_list.php" class="btn-back">
+            <i class="fa-solid fa-arrow-left"></i> Back to Events
+        </a>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="summary-cards">
+    <!-- Flash Message -->
+    <?php if (!empty($flash_message)): ?>
+    <div class="flash <?php echo $flash_type; ?>">
+        <i class="fa-solid <?php echo $flash_type === 'success' ? 'fa-circle-check' : ($flash_type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-xmark'); ?>"></i>
+        <?php echo htmlspecialchars($flash_message); ?>
+    </div>
+    <?php endif; ?>
 
-        <div class="summary-card">
-            <div class="card-icon" style="background: #dbeafe;">
-                <i class="fa-solid fa-users" style="color: #3b82f6;"></i>
-            </div>
-            <div class="card-content">
-                <h3><?php echo $total_registered; ?></h3>
-                <p>Total Registered</p>
-                <span class="card-meta" style="color: #10b981;"><i class="fa-solid fa-arrow-up"></i> <?php echo $new_today; ?> new today</span>
-            </div>
+    <!-- Stats Row -->
+    <div class="stats-row">
+        <div class="stat-card sc-total">
+            <div class="sv"><?php echo $stats['total']; ?></div>
+            <div class="sl">Total Marked</div>
+            <div class="ss"><?php echo count($registered_students); ?> registered</div>
         </div>
-
-        <div class="summary-card">
-            <div class="card-icon" style="background: #d1fae5;">
-                <i class="fa-solid fa-check" style="color: #10b981;"></i>
-            </div>
-            <div class="card-content">
-                <h3><?php echo $present_count; ?></h3>
-                <p>Present</p>
-                <span class="card-meta"><?php echo $attendance_rate; ?>% attendance</span>
-            </div>
+        <div class="stat-card sc-present">
+            <div class="sv"><?php echo $stats['present']; ?></div>
+            <div class="sl">Present</div>
+            <div class="ss">+10 pts each</div>
         </div>
-
-        <div class="summary-card">
-            <div class="card-icon" style="background: #fed7aa;">
-                <i class="fa-solid fa-clock" style="color: #f59e0b;"></i>
-            </div>
-            <div class="card-content">
-                <h3><?php echo $late_count; ?></h3>
-                <p>Late Arrivals</p>
-                <span class="card-meta">+5 pts each</span>
-            </div>
+        <div class="stat-card sc-late">
+            <div class="sv"><?php echo $stats['late']; ?></div>
+            <div class="sl">Late</div>
+            <div class="ss">+5 pts each</div>
         </div>
-
-        <div class="summary-card">
-            <div class="card-icon" style="background: #fee2e2;">
-                <i class="fa-solid fa-xmark" style="color: #ef4444;"></i>
-            </div>
-            <div class="card-content">
-                <h3><?php echo $absent_count; ?></h3>
-                <p>Absent (No Notice)</p>
-                <span class="card-meta">-10 pts each</span>
-            </div>
+        <div class="stat-card sc-absent">
+            <div class="sv"><?php echo $stats['absent']; ?></div>
+            <div class="sl">Absent</div>
+            <div class="ss">-10 pts each</div>
         </div>
-
+        <div class="stat-card sc-volunteer">
+            <div class="sv"><?php echo $stats['volunteer']; ?></div>
+            <div class="sl">Volunteer</div>
+            <div class="ss">+15 pts each</div>
+        </div>
     </div>
 
-    <!-- QR Code Check-in Section -->
-    <div class="checkin-section">
+    <!-- Two Column Layout -->
+    <div class="two-col">
 
-        <div class="qr-container">
-            <div class="qr-code-box">
-                <div class="qr-code-display" id="qrcode"></div>
-                <p class="qr-label">
-                    <i class="fa-solid fa-qrcode"></i> QR Code
-                </p>
-                <button class="download-btn" onclick="downloadQRCode()">
+        <!-- LEFT: Attendance List -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">
+                    <i class="fa-solid fa-list"></i>
+                    Attendance Records
+                    <span style="font-size:12px; background:#e8f0fe; color:#1a73e8; border-radius:20px; padding:2px 10px; font-weight:600; margin-left:6px;">
+                        <?php echo $stats['total']; ?> records
+                    </span>
+                </h2>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <form method="GET" style="display:contents;">
+                        <input type="hidden" name="event_id" value="<?php echo $event_id; ?>">
+                        <div class="search-wrap">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" name="search"
+                                   placeholder="Search student..."
+                                   value="<?php echo htmlspecialchars($search_q); ?>"
+                                   onchange="this.form.submit()">
+                        </div>
+                    </form>
+                    <button class="btn-export" onclick="exportCSV()">
+                        <i class="fa-solid fa-download"></i> Export CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="att-table" id="attTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Club</th>
+                            <th>Check-in</th>
+                            <th>Status</th>
+                            <th>Points</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($attendance_list)): ?>
+                        <tr class="empty-row">
+                            <td colspan="8">
+                                <i class="fa-solid fa-clipboard" style="display:block; font-size:32px; margin-bottom:8px; opacity:0.3;"></i>
+                                No attendance records yet for this event.<br>
+                                <span style="font-size:12px;">Use the form on the right to mark students.</span>
+                            </td>
+                        </tr>
+                        <?php else: foreach ($attendance_list as $i => $rec):
+                            $sc = statusColor($rec['attendance_status']);
+                            $pts = intval($rec['points_awarded']);
+                        ?>
+                        <tr>
+                            <td style="color:#9ca3af; font-size:12px;"><?php echo $i + 1; ?></td>
+                            <td><strong><?php echo htmlspecialchars($rec['student_id']); ?></strong></td>
+                            <td><?php echo htmlspecialchars($rec['student_name']); ?></td>
+                            <td><?php echo htmlspecialchars($rec['club_name']); ?></td>
+                            <td style="font-size:12.5px; color:#6b7280;">
+                                <?php echo $rec['check_in_time'] ? date('g:i A', strtotime($rec['check_in_time'])) : '—'; ?>
+                            </td>
+                            <td>
+                                <span class="status-pill" style="background:<?php echo $sc; ?>20; color:<?php echo $sc; ?>;">
+                                    <?php echo ucfirst($rec['attendance_status']); ?>
+                                </span>
+                            </td>
+                            <td class="pts-cell" style="color:<?php echo $pts >= 0 ? '#188038' : '#dc2626'; ?>;">
+                                <?php echo ($pts >= 0 ? '+' : '') . $pts; ?>
+                            </td>
+                            <td>
+                                <div class="action-btns">
+                                    <button class="btn-edit"
+                                            onclick="openEditModal(<?php echo $rec['attendance_id']; ?>, '<?php echo $rec['attendance_status']; ?>', '<?php echo htmlspecialchars($rec['student_name'], ENT_QUOTES); ?>')">
+                                        <i class="fa-solid fa-pen"></i> Edit
+                                    </button>
+                                    <button class="btn-del"
+                                            onclick="openDeleteModal(<?php echo $rec['attendance_id']; ?>, '<?php echo htmlspecialchars($rec['student_name'], ENT_QUOTES); ?>')">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div><!-- /panel left -->
+
+        <!-- RIGHT: Mark Attendance Form -->
+        <div class="panel form-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">
+                    <i class="fa-solid fa-circle-plus"></i>
+                    Mark Attendance
+                </h2>
+            </div>
+
+            <div class="form-inner">
+
+                <!-- Points Legend -->
+                <div class="points-hint">
+                    <strong>Points Guide:</strong><br>
+                    ✅ Present on time: <strong style="color:#188038;">+10 pts</strong><br>
+                    🕐 Late arrival: <strong style="color:#e37400;">+5 pts</strong><br>
+                    ❌ Absent: <strong style="color:#dc2626;">−10 pts</strong><br>
+                    🤝 Volunteer/Helper: <strong style="color:#7c3aed;">+15 pts</strong>
+                </div>
+
+                <form method="POST" id="markForm">
+                    <input type="hidden" name="action" value="mark_attendance">
+                    <input type="hidden" name="event_id" value="<?php echo $event_id; ?>">
+
+                    <div class="form-group">
+                        <label>Event</label>
+                        <input type="text" class="locked-field" value="<?php echo htmlspecialchars($event_name); ?>" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="text" class="locked-field" value="<?php echo date('d M Y', strtotime($event_date)); ?>" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Student ID <span style="color:#dc2626;">*</span></label>
+                        <input type="text" name="student_id" id="studentIdInput"
+                               placeholder="Enter Student ID e.g. CB22029"
+                               required autocomplete="off">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Attendance Status</label>
+                        <select name="attendance_status" required>
+                            <option value="present">✅ Present on time (+10 pts)</option>
+                            <option value="late">🕐 Late arrival (+5 pts)</option>
+                            <option value="absent">❌ Absent without notice (−10 pts)</option>
+                            <option value="volunteer">🤝 Volunteer / Helper (+15 pts)</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn-mark">
+                        <i class="fa-solid fa-check"></i> Mark Attendance
+                    </button>
+                </form>
+
+                <!-- Registered students quick-pick -->
+                <?php if (!empty($registered_students)): ?>
+                <div class="quick-pick">
+                    <div class="quick-pick-label">
+                        <i class="fa-solid fa-user-check" style="color:#1a73e8;"></i>
+                        Registered Students (click to fill)
+                    </div>
+                    <div class="reg-student-list">
+                        <?php foreach ($registered_students as $rs):
+                            $is_marked = in_array($rs['user_id'], $marked_user_ids);
+                            $display_sid = $rs['student_id'] ?: $rs['user_id'];
+                        ?>
+                        <div class="reg-student-item <?php echo $is_marked ? 'marked' : ''; ?>"
+                             <?php if (!$is_marked): ?>
+                             onclick="fillStudentId('<?php echo htmlspecialchars($display_sid, ENT_QUOTES); ?>')"
+                             title="Click to fill Student ID"
+                             <?php endif; ?>>
+                            <span>
+                                <strong><?php echo htmlspecialchars($display_sid); ?></strong>
+                                — <?php echo htmlspecialchars($rs['student_name']); ?>
+                            </span>
+                            <?php if ($is_marked): ?>
+                            <span class="reg-badge-done">✓ Marked</span>
+                            <?php else: ?>
+                            <i class="fa-solid fa-arrow-up-right-from-square" style="color:#9ca3af; font-size:10px;"></i>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+            </div><!-- /form-inner -->
+
+            <!-- QR Code Section -->
+            <div class="qr-section">
+                <div id="qrcode"></div>
+                <p><i class="fa-solid fa-qrcode"></i> QR code for this event</p>
+                <button onclick="downloadQR()" style="margin-top:8px; background:#f1f5f9; border:none; border-radius:8px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; color:#374151;">
                     <i class="fa-solid fa-download"></i> Download QR
                 </button>
             </div>
-        </div>
 
-        <div class="form-container">
-            <h2>
-                <i class="fa-solid fa-check-circle"></i>
-                QR Code Check-in — Tech Talk 2025
-            </h2>
+        </div><!-- /form-panel -->
 
-            <?php if (!empty($mark_message)): ?>
-                <div class="message <?php echo $mark_type; ?>">
-                    <?php echo $mark_message; ?>
-                </div>
-            <?php endif; ?>
+    </div><!-- /two-col -->
 
-            <form method="POST" class="attendance-form">
-                <input type="hidden" name="action" value="mark_attendance">
-
-                <div class="form-group">
-                    <label>Event Name</label>
-                    <input type="text" name="event_name" placeholder="e.g. Tech Talk 2025" value="Tech Talk 2025" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Event Date</label>
-                    <input type="date" name="event_date" value="<?php echo date('Y-m-d'); ?>" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Student ID</label>
-                    <input type="text" name="student_id" placeholder="e.g. CB22029" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Attendance Status</label>
-                    <select name="attendance_status" required>
-                        <option value="present">Present on time (+10 pts)</option>
-                        <option value="late">Late arrival (+5 pts)</option>
-                        <option value="absent">Absent without notice (-10 pts)</option>
-                        <option value="volunteer">Volunteer/Helper in event (+15 pts)</option>
-                    </select>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">
-                        <i class="fa-solid fa-check"></i> Mark Attendance
-                    </button>
-                    <button type="reset" class="btn-secondary">
-                        <i class="fa-solid fa-rotate-left"></i> Reset
-                    </button>
-                </div>
-
-            </form>
-        </div>
-
-    </div>
-
-    <!-- Attendance List Section -->
-    <div class="attendance-list-section">
-
-        <div class="section-header">
-            <h2>
-                <i class="fa-solid fa-list"></i>
-                Attendance List
-            </h2>
-
-            <div class="header-actions">
-                <div class="search-box">
-                    <form method="GET" class="search-form">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <input 
-                            type="text" 
-                            name="search" 
-                            placeholder="Search student ID or name..." 
-                            class="search-input"
-                            value="<?php echo htmlspecialchars($search_query); ?>"
-                        >
-                    </form>
-                </div>
-
-                <button class="export-btn" onclick="exportToCSV()">
-                    <i class="fa-solid fa-download"></i> Export
-                </button>
-            </div>
-        </div>
-
-        <!-- Attendance Table -->
-        <div class="table-container">
-            <table class="attendance-table" id="attendanceTable">
-                <thead>
-                    <tr>
-                        <th>Student ID</th>
-                        <th>Full Name</th>
-                        <th>Club</th>
-                        <th>Check-in Time</th>
-                        <th>Status</th>
-                        <th>Points</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($attendance_list)): ?>
-                        <?php foreach ($attendance_list as $record): ?>
-                            <tr>
-                                <td><?php echo $record['student_id']; ?></td>
-                                <td><?php echo $record['student_name']; ?></td>
-                                <td><?php echo $record['club_name']; ?></td>
-                                <td><?php echo $record['check_in_time'] ?: '-'; ?></td>
-                                <td>
-                                    <span class="status-badge" style="background: <?php echo getStatusColor($record['attendance_status']); ?>20; color: <?php echo getStatusColor($record['attendance_status']); ?>;">
-                                        <?php echo ucfirst(str_replace('_', ' ', $record['attendance_status'])); ?>
-                                    </span>
-                                </td>
-                                <td class="points-cell" style="color: <?php echo $record['points_awarded'] >= 0 ? '#10b981' : '#ef4444'; ?>;">
-                                    <strong><?php echo ($record['points_awarded'] >= 0 ? '+' : '') . $record['points_awarded']; ?></strong>
-                                </td>
-                                <td>
-                                    <button type="button" class="edit-btn" data-id="<?php echo $record['attendance_id']; ?>" data-status="<?php echo $record['attendance_status']; ?>">
-                                        <i class="fa-solid fa-pen"></i> Edit
-                                    </button>
-                                    <button type="button" class="delete-btn" data-id="<?php echo $record['attendance_id']; ?>">
-                                        <i class="fa-solid fa-trash"></i> Delete
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="7" style="text-align: center; padding: 30px; color: #999;">
-                                No attendance records found for today
-                            </td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-    </div>
-
-</div>
+</div><!-- /main-content -->
 
 <!-- =============================================
-EDIT ATTENDANCE MODAL
+     EDIT MODAL
 ============================================= -->
-<div id="editModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Edit Attendance</h2>
-            <button class="modal-close" onclick="closeEditModal()">&times;</button>
-        </div>
-        <form method="POST" class="edit-form">
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+        <h3 class="modal-title"><i class="fa-solid fa-pen" style="color:#1a73e8;"></i> Edit Attendance</h3>
+        <p id="editModalName" style="font-size:13.5px; color:#6b7280; margin:0 0 16px;"></p>
+        <form method="POST" id="editForm">
             <input type="hidden" name="action" value="edit_attendance">
-            <input type="hidden" name="attendance_id" id="editAttendanceId" value="">
-
+            <input type="hidden" name="event_id" value="<?php echo $event_id; ?>">
+            <input type="hidden" name="attendance_id" id="editAttId">
             <div class="form-group">
                 <label>Attendance Status</label>
-                <select name="attendance_status" id="editAttendanceStatus" required>
-                    <option value="present">Present on time (+10 pts)</option>
-                    <option value="late">Late arrival (+5 pts)</option>
-                    <option value="absent">Absent without notice (-10 pts)</option>
-                    <option value="volunteer">Volunteer/Helper in event (+15 pts)</option>
+                <select name="attendance_status" id="editStatusSelect">
+                    <option value="present">✅ Present on time (+10 pts)</option>
+                    <option value="late">🕐 Late arrival (+5 pts)</option>
+                    <option value="absent">❌ Absent without notice (−10 pts)</option>
+                    <option value="volunteer">🤝 Volunteer / Helper (+15 pts)</option>
                 </select>
             </div>
-
             <div class="modal-actions">
-                <button type="submit" class="btn-primary">
-                    <i class="fa-solid fa-save"></i> Save Changes
-                </button>
-                <button type="button" class="btn-secondary" onclick="closeEditModal()">
-                    <i class="fa-solid fa-times"></i> Cancel
-                </button>
+                <button type="submit" class="btn-confirm">Save Changes</button>
+                <button type="button" class="btn-cancel" onclick="closeModal('editModal')">Cancel</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- =============================================
-SCRIPTS
-============================================= -->
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-box">
+        <h3 class="modal-title"><i class="fa-solid fa-trash" style="color:#dc2626;"></i> Delete Record</h3>
+        <p id="deleteModalName" style="font-size:13.5px; color:#6b7280; margin:0 0 16px;"></p>
+        <form method="POST" id="deleteForm">
+            <input type="hidden" name="action" value="delete_attendance">
+            <input type="hidden" name="event_id" value="<?php echo $event_id; ?>">
+            <input type="hidden" name="attendance_id" id="deleteAttId">
+            <div class="modal-actions">
+                <button type="submit" class="btn-confirm" style="background:#dc2626;">Delete</button>
+                <button type="button" class="btn-cancel" onclick="closeModal('deleteModal')">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- QR code library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
 <script>
-// Generate QR Code
-function generateQRCode() {
-    document.getElementById('qrcode').innerHTML = '';
-    const qrData = 'Event: Tech Talk 2025 | Date: ' + document.querySelector('input[name="event_date"]').value;
+// =============================================
+// QR Code Generation
+// =============================================
+window.addEventListener('DOMContentLoaded', function () {
+    var qrData = "event_id=<?php echo $event_id; ?>&event=<?php echo urlencode($event_name); ?>&date=<?php echo $event_date; ?>";
     new QRCode(document.getElementById('qrcode'), {
         text: qrData,
-        width: 200,
-        height: 200,
-        colorDark: '#000000',
+        width: 160,
+        height: 160,
+        colorDark: '#0b1f4d',
         colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H
+        correctLevel: QRCode.CorrectLevel.M
     });
-}
+});
 
-// Download QR Code
-function downloadQRCode() {
-    const canvas = document.querySelector('#qrcode canvas');
-    if (canvas) {
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL();
-        link.download = 'tech-talk-2025-qr.png';
-        link.click();
-    }
-}
-
-// Export to CSV
-function exportToCSV() {
-    const table = document.getElementById('attendanceTable');
-    let csv = 'Student ID,Full Name,Club,Check-in Time,Status,Points\n';
-    
-    const rows = table.querySelectorAll('tbody tr');
-    rows.forEach(row => {
-        if (row.querySelector('td:nth-child(7) button') !== null) { // Check if it's a data row
-            const cells = row.querySelectorAll('td');
-            const rowData = [
-                cells[0].textContent.trim(),
-                cells[1].textContent.trim(),
-                cells[2].textContent.trim(),
-                cells[3].textContent.trim(),
-                cells[4].textContent.trim(),
-                cells[5].textContent.trim()
-            ];
-            csv += rowData.map(cell => '"' + cell + '"').join(',') + '\n';
-        }
-    });
-
-    const link = document.createElement('a');
-    link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    link.download = 'attendance-' + new Date().toISOString().split('T')[0] + '.csv';
+function downloadQR() {
+    var canvas = document.querySelector('#qrcode canvas');
+    if (!canvas) return alert('QR not ready yet.');
+    var link = document.createElement('a');
+    link.download = 'attendance_qr_event_<?php echo $event_id; ?>.png';
+    link.href = canvas.toDataURL();
     link.click();
 }
 
-// Edit Attendance Modal
-function openEditModal(attendanceId, status) {
-    document.getElementById('editAttendanceId').value = attendanceId;
-    document.getElementById('editAttendanceStatus').value = status;
-    document.getElementById('editModal').classList.add('show');
+// =============================================
+// Quick-pick: fill student ID input
+// =============================================
+function fillStudentId(sid) {
+    document.getElementById('studentIdInput').value = sid;
+    document.getElementById('studentIdInput').focus();
 }
 
-function closeEditModal() {
-    document.getElementById('editModal').classList.remove('show');
+// =============================================
+// Modals
+// =============================================
+function openEditModal(attId, status, name) {
+    document.getElementById('editAttId').value = attId;
+    document.getElementById('editStatusSelect').value = status;
+    document.getElementById('editModalName').textContent = 'Student: ' + name;
+    document.getElementById('editModal').classList.add('open');
 }
 
-// Delete Attendance
-function deleteAttendance(attendanceId) {
-    if (confirm('Are you sure you want to delete this attendance record? This action cannot be undone.')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="action" value="delete_attendance">
-            <input type="hidden" name="attendance_id" value="${attendanceId}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
-    }
+function openDeleteModal(attId, name) {
+    document.getElementById('deleteAttId').value = attId;
+    document.getElementById('deleteModalName').textContent =
+        'Are you sure you want to delete the attendance record for ' + name + '?';
+    document.getElementById('deleteModal').classList.add('open');
 }
 
-// Event listeners for edit and delete buttons
-document.addEventListener('DOMContentLoaded', function() {
-    // Edit button event listeners
-    document.querySelectorAll('.edit-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const attendanceId = this.getAttribute('data-id');
-            const status = this.getAttribute('data-status');
-            openEditModal(attendanceId, status);
-        });
-    });
+function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+}
 
-    // Delete button event listeners
-    document.querySelectorAll('.delete-btn').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const attendanceId = this.getAttribute('data-id');
-            deleteAttendance(attendanceId);
-        });
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+        if (e.target === el) el.classList.remove('open');
     });
 });
 
-// Toggle profile dropdown
-function toggleDropdown() {
-    const dropdown = document.getElementById('profileDropdown');
-    dropdown.classList.toggle('show');
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', function(event) {
-    const dropdown = document.getElementById('profileDropdown');
-    const profileBtn = document.querySelector('.profile-btn');
-    if (profileBtn && !profileBtn.contains(event.target)) {
-        dropdown.classList.remove('show');
-    }
-});
-
-// Auto-submit search form
-const searchInput = document.querySelector('.search-input');
-if (searchInput) {
-    searchInput.addEventListener('keyup', function() {
-        document.querySelector('.search-form').submit();
+// =============================================
+// Export CSV
+// =============================================
+function exportCSV() {
+    var table = document.getElementById('attTable');
+    var rows = table.querySelectorAll('tr');
+    var csv = [];
+    rows.forEach(function(row) {
+        var cols = row.querySelectorAll('th, td');
+        var rowData = [];
+        // skip last column (Action)
+        for (var i = 0; i < cols.length - 1; i++) {
+            var text = cols[i].innerText.replace(/\n/g, ' ').replace(/,/g, ';');
+            rowData.push('"' + text + '"');
+        }
+        csv.push(rowData.join(','));
     });
+    var blob = new Blob([csv.join('\n')], {type: 'text/csv'});
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url;
+    a.download = 'attendance_<?php echo $event_id; ?>_<?php echo $event_date; ?>.csv';
+    a.click();
 }
-
-// Generate QR code on page load
-document.addEventListener('DOMContentLoaded', generateQRCode);
-
-// Close modal when clicking outside
-window.addEventListener('click', function(event) {
-    const modal = document.getElementById('editModal');
-    if (event.target == modal) {
-        modal.classList.remove('show');
-    }
-});
 </script>
-
-</body>
-</html>
-
-<?php
-// =============================================
-// HELPER FUNCTION - GET STATUS COLOR
-// =============================================
-function getStatusColor($status) {
-    switch ($status) {
-        case 'present':
-            return '#10b981';
-        case 'late':
-            return '#f59e0b';
-        case 'absent':
-            return '#ef4444';
-        case 'volunteer':
-            return '#8b5cf6';
-        default:
-            return '#64748b';
-    }
-}
-?>
 
 <?php include '../Includes/footer.php'; ?>

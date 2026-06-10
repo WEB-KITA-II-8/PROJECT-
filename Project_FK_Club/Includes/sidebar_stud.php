@@ -30,14 +30,9 @@ SIDEBAR
             Event Registration
         </a>
 
-        <a href="participation_student.php">
+        <a href="participation_student.php" class="<?php echo (basename($_SERVER['PHP_SELF'])==='participation_student.php') ? 'active' : ''; ?>">
             <i class="fa-solid fa-chart-line"></i>
-            Participation
-        </a>
-
-        <a href="reports.php">
-            <i class="fa-solid fa-file-lines"></i>
-            Reports
+            My Participation
         </a>
 
     </div>

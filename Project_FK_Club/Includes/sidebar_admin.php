@@ -57,10 +57,23 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </a>
 
         <a href="participation_dashboard.php" class="<?php echo ($current_page === 'participation_dashboard.php') ? 'active' : ''; ?>">
-
             <i class="fa-solid fa-chart-bar"></i>
             Participation
+        </a>
 
+        <a href="event_attendance_list.php" class="<?php echo in_array($current_page, ['event_attendance_list.php', 'manage_event_attendance.php']) ? 'active' : ''; ?>">
+            <i class="fa-solid fa-clipboard-check"></i>
+            Attendance
+        </a>
+
+        <a href="participant_points.php" class="<?php echo ($current_page === 'participant_points.php') ? 'active' : ''; ?>">
+            <i class="fa-solid fa-crown"></i>
+            Points & Ranking
+        </a>
+
+        <a href="event_reports.php" class="<?php echo ($current_page === 'event_reports.php') ? 'active' : ''; ?>">
+            <i class="fa-solid fa-file-lines"></i>
+            Event Reports
         </a>
 
     </div>

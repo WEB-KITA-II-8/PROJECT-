@@ -1,117 +1,110 @@
 <?php
 // =============================================
 // PARTICIPATION POINTS & RANKING
-// FILE: participant_points.php
+// FILE: Admin/participant_points.php
+// MODULE 4 - Points, Rankings & Recognition
 // =============================================
 
 session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Database connection
 include '../db_connect.php';
 
-// =============================================
-// SECURITY CHECK
-// =============================================
 if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'committee'])) {
     header("Location: ../index.php");
     exit();
 }
 
-// =============================================
-// USER SESSION DATA
-// =============================================
-$user_id = $_SESSION['user_id'] ?? 1;
+$user_id   = $_SESSION['user_id'] ?? 1;
 $user_name = $_SESSION['full_name'] ?? 'User';
 $user_role = $_SESSION['role'] ?? 'admin';
 
 // =============================================
-// FETCH STUDENTS WITH POINTS
+// SEARCH / FILTER
 // =============================================
-$students = [];
-$search_query = $_GET['search'] ?? '';
+$search     = isset($_GET['search'])      ? mysqli_real_escape_string($conn, trim($_GET['search'])) : '';
+$filter_rec = isset($_GET['recognition']) ? mysqli_real_escape_string($conn, $_GET['recognition'])  : 'all';
 
-// Base query to fetch students
+// =============================================
+// FETCH ALL STUDENTS WITH REAL POINTS
+// (JOIN users + event_attendance)
+// =============================================
+$having_clause = '';
+if ($filter_rec === 'Outstanding')    $having_clause = 'HAVING total_points >= 80';
+elseif ($filter_rec === 'Active')     $having_clause = 'HAVING total_points BETWEEN 50 AND 79';
+elseif ($filter_rec === 'Eligible')   $having_clause = 'HAVING total_points BETWEEN 20 AND 49';
+elseif ($filter_rec === 'Warning')    $having_clause = 'HAVING total_points < 20';
+
+$search_clause = '';
+if (!empty($search)) {
+    $search_clause = "AND (u.full_name LIKE '%$search%' OR u.student_id LIKE '%$search%' OR u.email LIKE '%$search%')";
+}
+
 $query = "
-    SELECT 
+    SELECT
         u.user_id,
+        u.student_id,
         u.full_name,
         u.email,
-        COUNT(DISTINCT m.club_id) as clubs_joined,
-        COALESCE(COUNT(DISTINCT m.club_id), 0) as events_attended,
-        (COALESCE(COUNT(DISTINCT m.club_id), 0) * 10) + (COUNT(DISTINCT m.club_id) * 5) as total_points
+        COUNT(DISTINCT m.club_id)       AS clubs_joined,
+        COUNT(DISTINCT ea.attendance_id) AS events_attended,
+        COALESCE(SUM(ea.points_awarded), 0) AS total_points
     FROM users u
-    LEFT JOIN memberships m ON u.user_id = m.user_id
+    LEFT JOIN memberships m       ON u.user_id = m.user_id AND m.membership_status = 'Active'
+    LEFT JOIN event_attendance ea ON u.user_id = ea.user_id
     WHERE u.role = 'student'
+    $search_clause
+    GROUP BY u.user_id
+    $having_clause
+    ORDER BY total_points DESC
 ";
 
-// Add search filter if provided
-if (!empty($search_query)) {
-    $search_query = mysqli_real_escape_string($conn, $search_query);
-    $query .= " AND (u.full_name LIKE '%$search_query%' OR u.user_id LIKE '%$search_query%')";
+$result   = mysqli_query($conn, $query);
+$students = [];
+while ($row = mysqli_fetch_assoc($result)) {
+    $row['recognition'] = getRecognitionLevel($row['total_points']);
+    $students[] = $row;
 }
 
-$query .= " GROUP BY u.user_id, u.full_name, u.email ORDER BY total_points DESC";
-
-$result = mysqli_query($conn, $query);
-
-if ($result) {
-    while ($row = mysqli_fetch_assoc($result)) {
-        $row['recognition'] = getRecognitionLevel($row['total_points']);
-        $students[] = $row;
-    }
-}
-
-// =============================================
-// RECOGNITION LEVEL FUNCTION
-// =============================================
-function getRecognitionLevel($points) {
-    if ($points >= 80) return 'Outstanding';
-    elseif ($points >= 50) return 'Active Student';
-    elseif ($points >= 20) return 'Eligible';
-    else return 'Warning';
-}
-
-// =============================================
-// GET TOP STUDENTS (Top 4)
-// =============================================
+// Top 4 for leaderboard
 $top_students = array_slice($students, 0, 4);
 
 // =============================================
-// RECOGNITION LEVELS DATA
+// RECOGNITION LEVEL COUNTS (summary)
 // =============================================
-$recognition_levels = [
-    [
-        'level' => 'Warning',
-        'icon' => 'fa-triangle-exclamation',
-        'color' => '#ef4444',
-        'range' => '< 20 points',
-        'description' => 'Reminder to participate',
-    ],
-    [
-        'level' => 'Eligible',
-        'icon' => 'fa-bookmark',
-        'color' => '#3b82f6',
-        'range' => '20-49 points',
-        'description' => 'Participation certificate',
-    ],
-    [
-        'level' => 'Active Student',
-        'icon' => 'fa-star',
-        'color' => '#10b981',
-        'range' => '50-79 points',
-        'description' => 'Active student award',
-    ],
-    [
-        'level' => 'Outstanding',
-        'icon' => 'fa-crown',
-        'color' => '#f59e0b',
-        'range' => '80+ points',
-        'description' => 'Leadership award',
-    ],
-];
+$count_result = mysqli_query($conn, "
+    SELECT
+        SUM(CASE WHEN pts < 20               THEN 1 ELSE 0 END) AS warning,
+        SUM(CASE WHEN pts BETWEEN 20 AND 49  THEN 1 ELSE 0 END) AS eligible,
+        SUM(CASE WHEN pts BETWEEN 50 AND 79  THEN 1 ELSE 0 END) AS active,
+        SUM(CASE WHEN pts >= 80              THEN 1 ELSE 0 END) AS outstanding
+    FROM (
+        SELECT u.user_id, COALESCE(SUM(ea.points_awarded),0) AS pts
+        FROM users u
+        LEFT JOIN event_attendance ea ON u.user_id = ea.user_id
+        WHERE u.role='student'
+        GROUP BY u.user_id
+    ) sub
+");
+$counts = mysqli_fetch_assoc($count_result);
 
+// =============================================
+// HELPER FUNCTIONS
+// =============================================
+function getRecognitionLevel($points) {
+    if ($points >= 80)     return ['label' => 'Outstanding',    'color' => '#f59e0b', 'icon' => 'fa-crown'];
+    elseif ($points >= 50) return ['label' => 'Active Student', 'color' => '#10b981', 'icon' => 'fa-star'];
+    elseif ($points >= 20) return ['label' => 'Eligible',       'color' => '#3b82f6', 'icon' => 'fa-bookmark'];
+    else                   return ['label' => 'Warning',        'color' => '#ef4444', 'icon' => 'fa-triangle-exclamation'];
+}
+
+$recognition_levels = [
+    ['level'=>'Warning',       'icon'=>'fa-triangle-exclamation','color'=>'#ef4444','range'=>'< 20 pts',   'description'=>'Reminder to participate more',       'count' => $counts['warning']     ?? 0],
+    ['level'=>'Eligible',      'icon'=>'fa-bookmark',            'color'=>'#3b82f6','range'=>'20–49 pts',  'description'=>'Eligible for participation cert.',   'count' => $counts['eligible']    ?? 0],
+    ['level'=>'Active Student','icon'=>'fa-star',                'color'=>'#10b981','range'=>'50–79 pts',  'description'=>'Eligible for active student award',  'count' => $counts['active']      ?? 0],
+    ['level'=>'Outstanding',   'icon'=>'fa-crown',               'color'=>'#f59e0b','range'=>'80+ pts',    'description'=>'Leadership award & priority access', 'count' => $counts['outstanding'] ?? 0],
+];
 ?>
 
 <title>Participation Points & Ranking</title>
@@ -119,246 +112,245 @@ $recognition_levels = [
 <?php include '../Includes/header_admin.php'; ?>
 <?php include '../Includes/sidebar_admin.php'; ?>
 
-<!-- =============================================
-TOPBAR
-============================================= -->
-<div class="topbar">
-
-    <div class="profile-menu">
-
-        <button class="profile-btn" onclick="toggleDropdown()">
-
-            <div class="profile-info">
-                <span class="profile-name">
-                    <?php echo strtoupper($user_name); ?>
-                </span>
-
-                <span class="profile-role">
-                    <?php echo ucfirst($user_role); ?>
-                </span>
-            </div>
-
-            <div class="profile-icon">
-                <i class="fa-solid fa-user"></i>
-            </div>
-
-        </button>
-
-        <div class="dropdown-content" id="profileDropdown">
-
-            <a href="#">
-                <i class="fa-solid fa-user"></i>
-                Manage Profile
-            </a>
-
-            <a href="Project/logout.php">
-                <i class="fa-solid fa-right-from-bracket"></i>
-                Logout
-            </a>
-
-        </div>
-
-    </div>
-
-</div>
-
-<!-- =============================================
-MAIN CONTENT
-============================================= -->
 <div class="main-content">
 
-    <!-- Page Header -->
-    <div class="page-header">
-        <h1>Participation Points & Ranking</h1>
-        <p>Student recognition levels based on accumulated points</p>
+    <!-- PAGE HEADER -->
+    <div class="pp-page-header">
+        <div>
+            <h1><i class="fa-solid fa-crown" style="color:#f59e0b;"></i> Participation Points & Ranking</h1>
+            <p>Student recognition levels based on accumulated event attendance points</p>
+        </div>
+        <a href="participation_dashboard.php" class="pp-btn-back">
+            <i class="fa-solid fa-arrow-left"></i> Dashboard
+        </a>
     </div>
 
-    <!-- Recognition Levels & Top Students Section -->
-    <div class="section-container">
+    <!-- RECOGNITION LEVEL CARDS -->
+    <div class="pp-levels-grid">
+        <?php foreach ($recognition_levels as $lvl): ?>
+        <div class="pp-level-card" style="border-top:4px solid <?php echo $lvl['color']; ?>;">
+            <div class="pp-level-icon" style="background:<?php echo $lvl['color']; ?>20;color:<?php echo $lvl['color']; ?>;">
+                <i class="fa-solid <?php echo $lvl['icon']; ?>"></i>
+            </div>
+            <div class="pp-level-body">
+                <h3><?php echo $lvl['level']; ?></h3>
+                <span class="pp-level-range"><?php echo $lvl['range']; ?></span>
+                <p><?php echo $lvl['description']; ?></p>
+                <div class="pp-level-count"><?php echo $lvl['count']; ?> students</div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
 
-        <!-- Recognition Levels -->
-        <div class="recognition-section">
-            <h2>
-                <i class="fa-solid fa-shield"></i>
-                Recognition Levels
-            </h2>
-            <div class="levels-grid">
-                <?php foreach ($recognition_levels as $level): ?>
-                    <div class="level-card" style="border-left: 4px solid <?php echo $level['color']; ?>;">
-                        <div class="level-icon" style="color: <?php echo $level['color']; ?>;">
-                            <i class="fa-solid <?php echo $level['icon']; ?>"></i>
-                        </div>
-                        <div class="level-content">
-                            <h3><?php echo $level['level']; ?></h3>
-                            <p class="level-range"><?php echo $level['range']; ?></p>
-                            <p class="level-description"><?php echo $level['description']; ?></p>
+    <!-- TOP STUDENTS LEADERBOARD -->
+    <div class="pp-section-row">
+
+        <div class="pp-card pp-leaderboard">
+            <h2><i class="fa-solid fa-trophy"></i> Top Students This Semester</h2>
+            <?php if (empty($top_students)): ?>
+                <div class="pp-empty"><i class="fa-solid fa-users"></i><p>No student data yet</p></div>
+            <?php else: ?>
+            <div class="pp-ranking-list">
+                <?php foreach ($top_students as $i => $s):
+                    $rec = $s['recognition'];
+                    $medals = ['fa-medal','fa-medal','fa-medal','fa-medal'];
+                    $medal_colors = ['#f59e0b','#94a3b8','#cd7c2a','#64748b'];
+                ?>
+                <div class="pp-rank-item">
+                    <div class="pp-rank-num" style="color:<?php echo $medal_colors[$i]; ?>;">
+                        <i class="fa-solid <?php echo $medals[$i]; ?>"></i>
+                        <?php echo $i+1; ?>
+                    </div>
+                    <div class="pp-rank-info">
+                        <strong><?php echo htmlspecialchars($s['full_name']); ?></strong>
+                        <span><?php echo htmlspecialchars($s['student_id'] ?? '-'); ?></span>
+                    </div>
+                    <div class="pp-rank-progress">
+                        <div class="pp-progress-bar">
+                            <div style="width:<?php echo min(($s['total_points']/100)*100, 100); ?>%;background:<?php echo $rec['color']; ?>;height:100%;border-radius:4px;"></div>
                         </div>
                     </div>
+                    <div class="pp-rank-pts">
+                        <strong style="color:<?php echo $rec['color']; ?>;"><?php echo $s['total_points']; ?></strong>
+                        <small>pts</small>
+                    </div>
+                    <span class="pp-badge" style="background:<?php echo $rec['color']; ?>20;color:<?php echo $rec['color']; ?>;">
+                        <?php echo $rec['label']; ?>
+                    </span>
+                </div>
                 <?php endforeach; ?>
             </div>
+            <?php endif; ?>
         </div>
 
-        <!-- Top Students This Semester -->
-        <div class="top-students-section">
-            <h2>
-                <i class="fa-solid fa-chart-line"></i>
-                Top Students This Semester
-            </h2>
-            <div class="ranking-list">
-                <?php 
-                $rank = 1;
-                foreach ($top_students as $student): 
-                    $recognition = getRecognitionLevel($student['total_points']);
-                    $status_color = getStatusColor($recognition);
-                ?>
-                    <div class="ranking-item">
-                        <div class="rank-number"><?php echo $rank; ?></div>
-                        <div class="student-info">
-                            <h4><?php echo $student['full_name']; ?></h4>
-                            <span class="student-email"><?php echo $student['email']; ?></span>
-                        </div>
-                        <div class="progress-bar-container">
-                            <div class="progress-bar" style="width: <?php echo min(($student['total_points'] / 100) * 100, 100); ?>%; background: <?php echo $status_color; ?>;"></div>
-                        </div>
-                        <div class="points-info">
-                            <span class="points"><?php echo $student['total_points']; ?> pts</span>
-                            <span class="status-badge" style="background: <?php echo $status_color; ?>20; color: <?php echo $status_color; ?>;">
-                                <?php echo $recognition; ?>
-                            </span>
-                        </div>
-                    </div>
-                <?php 
-                $rank++;
-                endforeach; 
-                ?>
-            </div>
+        <!-- Points Chart -->
+        <div class="pp-card pp-chart-card">
+            <h2><i class="fa-solid fa-chart-pie"></i> Points Distribution</h2>
+            <canvas id="pointsDistChart" height="10"></canvas>
         </div>
 
     </div>
 
-    <!-- All Students - Points & Status -->
-    <div class="all-students-section">
-
-        <div class="section-header">
-            <h2>
-                <i class="fa-solid fa-users"></i>
-                All Students — Points & Status
-            </h2>
-            
-            <div class="search-box">
-                <form method="GET" class="search-form">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input 
-                        type="text" 
-                        name="search" 
-                        placeholder="Search by name or ID..." 
-                        class="search-input"
-                        value="<?php echo htmlspecialchars($search_query); ?>"
-                    >
+    <!-- ALL STUDENTS TABLE -->
+    <div class="pp-card" style="margin-top:24px;">
+        <div class="pp-table-header">
+            <h2><i class="fa-solid fa-users"></i> All Students — Points & Status</h2>
+            <div class="pp-table-controls">
+                <!-- Search -->
+                <form method="GET" style="display:flex;gap:8px;align-items:center;">
+                    <div class="pp-search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" name="search" placeholder="Search name / ID..."
+                               value="<?php echo htmlspecialchars($search); ?>" class="pp-search-input">
+                    </div>
+                    <!-- Recognition filter -->
+                    <select name="recognition" class="pp-filter-select" onchange="this.form.submit()">
+                        <option value="all">All Levels</option>
+                        <option value="Warning"      <?php echo $filter_rec==='Warning'      ? 'selected':'' ?>>Warning</option>
+                        <option value="Eligible"     <?php echo $filter_rec==='Eligible'     ? 'selected':'' ?>>Eligible</option>
+                        <option value="Active"       <?php echo $filter_rec==='Active'       ? 'selected':'' ?>>Active Student</option>
+                        <option value="Outstanding"  <?php echo $filter_rec==='Outstanding'  ? 'selected':'' ?>>Outstanding</option>
+                    </select>
+                    <button type="submit" class="pp-search-btn"><i class="fa-solid fa-search"></i></button>
+                    <?php if (!empty($search) || $filter_rec !== 'all'): ?>
+                        <a href="participant_points.php" class="pp-clear-btn">
+                            <i class="fa-solid fa-xmark"></i> Clear
+                        </a>
+                    <?php endif; ?>
                 </form>
             </div>
         </div>
 
-        <!-- Students Table -->
-        <div class="table-container">
-            <table class="students-table">
+        <div class="pp-table-wrap">
+            <table class="pp-table">
                 <thead>
                     <tr>
+                        <th>#</th>
                         <th>Student ID</th>
-                        <th>Name</th>
-                        <th>Clubs Joined</th>
-                        <th>Events Attended</th>
+                        <th>Full Name</th>
+                        <th>Email</th>
+                        <th>Clubs</th>
+                        <th>Events</th>
                         <th>Total Points</th>
                         <th>Recognition</th>
-                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($students)): ?>
-                        <?php foreach ($students as $student): ?>
-                            <?php $recognition = getRecognitionLevel($student['total_points']); ?>
-                            <tr>
-                                <td><?php echo $student['user_id']; ?></td>
-                                <td><?php echo $student['full_name']; ?></td>
-                                <td><?php echo $student['clubs_joined']; ?></td>
-                                <td><?php echo $student['events_attended']; ?></td>
-                                <td class="points-cell" style="color: <?php echo getStatusColor($recognition); ?>;">
-                                    <strong><?php echo $student['total_points']; ?> pts</strong>
-                                </td>
-                                <td>
-                                    <span class="recognition-badge" style="background: <?php echo getStatusColor($recognition); ?>20; color: <?php echo getStatusColor($recognition); ?>;">
-                                        <?php echo $recognition; ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <button class="view-btn" onclick="alert('View details for <?php echo $student['full_name']; ?>')">
-                                        <i class="fa-solid fa-eye"></i> View
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
+                    <?php if (empty($students)): ?>
+                    <tr><td colspan="8" style="text-align:center;padding:40px;color:#94a3b8;">No students found</td></tr>
                     <?php else: ?>
-                        <tr>
-                            <td colspan="7" style="text-align: center; padding: 30px; color: #999;">
-                                No students found
-                            </td>
-                        </tr>
+                    <?php foreach ($students as $i => $s):
+                        $rec = $s['recognition'];
+                    ?>
+                    <tr>
+                        <td><strong><?php echo $i+1; ?></strong></td>
+                        <td><?php echo htmlspecialchars($s['student_id'] ?? '-'); ?></td>
+                        <td><?php echo htmlspecialchars($s['full_name']); ?></td>
+                        <td><?php echo htmlspecialchars($s['email']); ?></td>
+                        <td><?php echo $s['clubs_joined']; ?></td>
+                        <td><?php echo $s['events_attended']; ?></td>
+                        <td><strong style="color:<?php echo $rec['color']; ?>;"><?php echo $s['total_points']; ?> pts</strong></td>
+                        <td>
+                            <span class="pp-badge" style="background:<?php echo $rec['color']; ?>20;color:<?php echo $rec['color']; ?>;">
+                                <i class="fa-solid <?php echo $rec['icon']; ?>"></i>
+                                <?php echo $rec['label']; ?>
+                            </span>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
             </table>
         </div>
-
+        <div class="pp-table-footer">
+            Showing <?php echo count($students); ?> student(s)
+        </div>
     </div>
 
-</div>
+</div><!-- end main-content -->
 
-<!-- =============================================
-SCRIPTS
-============================================= -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Toggle profile dropdown
-function toggleDropdown() {
-    const dropdown = document.getElementById('profileDropdown');
-    dropdown.classList.toggle('show');
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', function(event) {
-    const dropdown = document.getElementById('profileDropdown');
-    const profileBtn = document.querySelector('.profile-btn');
-    if (!profileBtn.contains(event.target)) {
-        dropdown.classList.remove('show');
+const distCtx = document.getElementById('pointsDistChart').getContext('2d');
+new Chart(distCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Warning (<20)', 'Eligible (20-49)', 'Active (50-79)', 'Outstanding (80+)'],
+        datasets: [{
+            data: [
+                <?php echo (int)($counts['warning']     ?? 0); ?>,
+                <?php echo (int)($counts['eligible']    ?? 0); ?>,
+                <?php echo (int)($counts['active']      ?? 0); ?>,
+                <?php echo (int)($counts['outstanding'] ?? 0); ?>
+            ],
+            backgroundColor: ['#ef4444','#3b82f6','#10b981','#f59e0b'],
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 14 } }
+        }
     }
 });
-
-// Auto-submit search form
-const searchInput = document.querySelector('.search-input');
-if (searchInput) {
-    searchInput.addEventListener('keyup', function() {
-        document.querySelector('.search-form').submit();
-    });
-}
 </script>
 
-</body>
-</html>
+<style>
+.pp-page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+.pp-page-header h1{font-size:24px;font-weight:800;color:#1e293b;margin:0;display:flex;align-items:center;gap:10px;}
+.pp-page-header p{font-size:14px;color:#64748b;margin:4px 0 0;}
+.pp-btn-back{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#374151;
+    border:1.5px solid #e2e8f0;padding:10px 18px;border-radius:12px;text-decoration:none;
+    font-size:14px;font-weight:600;transition:all .2s;}
+.pp-btn-back:hover{border-color:#3b82f6;color:#3b82f6;}
+.pp-levels-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:24px;}
+.pp-level-card{background:#fff;border-radius:16px;padding:22px;box-shadow:0 2px 10px rgba(0,0,0,.05);
+    display:flex;gap:16px;align-items:flex-start;}
+.pp-level-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;
+    justify-content:center;font-size:20px;flex-shrink:0;}
+.pp-level-body h3{font-size:15px;font-weight:700;color:#1e293b;margin:0 0 2px;}
+.pp-level-range{font-size:12px;font-weight:700;color:#64748b;}
+.pp-level-body p{font-size:12px;color:#94a3b8;margin:4px 0 8px;}
+.pp-level-count{font-size:22px;font-weight:800;color:#1e293b;}
+.pp-section-row{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-bottom:0;}
+.pp-card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+.pp-card h2{font-size:16px;font-weight:700;color:#1e293b;margin-bottom:18px;display:flex;align-items:center;gap:10px;}
+.pp-ranking-list{display:flex;flex-direction:column;gap:12px;}
+.pp-rank-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;
+    background:#f8fafc;border:1px solid #f1f5f9;}
+.pp-rank-num{display:flex;align-items:center;gap:4px;font-weight:700;font-size:15px;width:36px;}
+.pp-rank-info{flex:1;}
+.pp-rank-info strong{display:block;font-size:14px;color:#1e293b;}
+.pp-rank-info span{font-size:12px;color:#64748b;}
+.pp-rank-progress{flex:1;max-width:120px;}
+.pp-progress-bar{background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;}
+.pp-rank-pts{text-align:right;min-width:50px;}
+.pp-rank-pts strong{font-size:18px;display:block;}
+.pp-rank-pts small{font-size:11px;color:#64748b;}
+.pp-badge{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;}
+.pp-empty{text-align:center;padding:40px;color:#94a3b8;}
+.pp-empty i{font-size:40px;display:block;margin-bottom:12px;}
+.pp-table-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:12px;}
+.pp-table-header h2{margin:0;font-size:16px;font-weight:700;color:#1e293b;display:flex;align-items:center;gap:10px;}
+.pp-table-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.pp-search-box{display:flex;align-items:center;gap:8px;border:1.5px solid #e2e8f0;
+    border-radius:10px;padding:8px 14px;background:#f8fafc;}
+.pp-search-box i{color:#94a3b8;}
+.pp-search-input{border:none;background:transparent;outline:none;font-size:14px;width:180px;color:#1e293b;}
+.pp-filter-select{padding:8px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;background:#f8fafc;color:#1e293b;}
+.pp-search-btn{padding:8px 14px;background:#3b82f6;color:#fff;border:none;border-radius:10px;cursor:pointer;}
+.pp-clear-btn{padding:8px 12px;background:#fee2e2;color:#dc2626;border-radius:10px;
+    text-decoration:none;font-size:13px;font-weight:600;}
+.pp-table-wrap{overflow-x:auto;}
+.pp-table{width:100%;border-collapse:collapse;font-size:14px;}
+.pp-table thead th{background:#f8fafc;padding:12px 16px;text-align:left;
+    font-weight:700;color:#374151;font-size:13px;border-bottom:2px solid #e2e8f0;}
+.pp-table tbody td{padding:12px 16px;border-bottom:1px solid #f1f5f9;color:#374151;}
+.pp-table tbody tr:hover{background:#f8fafc;}
+.pp-table-footer{text-align:right;font-size:13px;color:#94a3b8;margin-top:12px;}
+@media(max-width:1100px){.pp-levels-grid{grid-template-columns:repeat(2,1fr);}.pp-section-row{grid-template-columns:1fr;}}
+@media(max-width:600px){.pp-levels-grid{grid-template-columns:1fr;}}
+</style>
 
-<?php
-// =============================================
-// HELPER FUNCTION - GET STATUS COLOR
-// =============================================
-function getStatusColor($recognition) {
-    switch ($recognition) {
-        case 'Outstanding':
-            return '#f59e0b';
-        case 'Active Student':
-            return '#10b981';
-        case 'Eligible':
-            return '#3b82f6';
-        case 'Warning':
-            return '#ef4444';
-        default:
-            return '#64748b';
-    }
-}
-?>
+<?php include '../Includes/footer.php'; ?>
